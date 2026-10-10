@@ -74,17 +74,27 @@ var BASE = (function () {
 })();
 function colorOf(k) { return 'var(--c-' + k + ')'; }
 function geoPoint(b) {
-  return [b.lon || 85.835, b.lat || 20.275];
+  // Older cloud records may not have lon/lat yet. Fall back to the matching
+  // seed stop by bin ID so every pin still lands on its own real coordinate.
+  var spec = E.SPEC.filter(function (s) { return s[0] === b.id; })[0];
+  var lon = b.lon != null ? Number(b.lon) : (spec ? spec[9] : 85.835);
+  var lat = b.lat != null ? Number(b.lat) : (spec ? spec[10] : 20.275);
+  return [lon, lat];
+}
+function geoName(b) {
+  var spec = E.SPEC.filter(function (s) { return s[0] === b.id; })[0];
+  return spec ? spec[1] : b.name;
 }
 function cssColor(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 function geoMarkerHTML(r, layer, withRoute) {
   var b = r.b, cls = layer === 'cur' ? E.fillCls(b.cur) : layer === 'pred' ? E.fillCls(r.pred) : r.tier;
   var val = layer === 'cur' ? Math.round(b.cur) : layer === 'pred' ? Math.round(r.pred) : Math.round(r.score * 100);
   var idx = withRoute && plan ? plan.route.indexOf(b.id) : -1;
-  var tip = b.id + ' ' + b.name + ' · ' + Math.round(b.cur) + '% now · ' + Math.round(r.pred) + '% by morning · priority ' + Math.round(r.score * 100);
+  var place = geoName(b);
+  var tip = b.id + ' ' + place + ' · ' + Math.round(b.cur) + '% now · ' + Math.round(r.pred) + '% by morning · priority ' + Math.round(r.score * 100);
   var el = document.createElement('button');
   el.type = 'button'; el.className = 'geo-bin' + (withRoute && plan && idx < 0 ? ' dim' : '') + (sel === b.id ? ' sel' : '');
-  el.setAttribute('data-id', b.id); el.setAttribute('data-place', b.name); el.setAttribute('aria-label', tip);
+  el.setAttribute('data-id', b.id); el.setAttribute('data-place', place); el.setAttribute('aria-label', tip);
   el.style.setProperty('--pin', cssColor('--c-' + cls));
   el.innerHTML = '<span class="geo-bin-ring">' + val + '</span><span class="geo-bin-label">' + esc(b.id) + '</span>'
     + (idx >= 0 ? '<span class="geo-stop' + (ticked()[b.id] ? ' done' : '') + '" data-stop="' + idx + '">' + (idx + 1) + '</span>' : '');
@@ -106,7 +116,7 @@ function renderGeoMap(side, layer, withRoute) {
   var depotEl = document.createElement('div'); depotEl.className = 'geo-depot'; depotEl.textContent = 'D'; depotEl.title = 'Collection depot';
   geoMarkers[side].push(new maplibregl.Marker({ element: depotEl, anchor: 'center' }).setLngLat(geoPoint(DEPOT)).addTo(map));
   D.forEach(function (r) {
-    geoMarkers[side].push(new maplibregl.Marker({ element: geoMarkerHTML(r, layer, withRoute), anchor: 'bottom' }).setLngLat(geoPoint(r.b)).addTo(map));
+    geoMarkers[side].push(new maplibregl.Marker({ element: geoMarkerHTML(r, layer, withRoute), anchor: 'center' }).setLngLat(geoPoint(r.b)).addTo(map));
   });
   requestAnimationFrame(function () { map.resize(); });
   return true;

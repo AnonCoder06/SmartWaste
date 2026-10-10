@@ -16,7 +16,7 @@ The gateway offers two workspaces: **Report & Upload** for residents and volunte
 
 In Report & Upload, users select a bin on the map, then upload a photo or choose a sample image to estimate its fill level. Map markers show the place name on hover or keyboard focus. The map and photo report are placed before the overflow and priority summaries so the main reporting actions are easy to reach.
 
-The sample bin locations are illustrative points in a Bengaluru demo neighborhood, not real collection addresses. The AWS map uses Amazon Location; local runs use the built-in sample map unless AWS map configuration is present.
+The seeded bin markers use named Mo Bus stop coordinates from BhubaneswarOne's bus stop layer. The route planner still uses its sample street grid for distance estimates. The AWS map uses Amazon Location; local runs use the built-in sample map unless AWS map configuration is present.
 
 ## What runs on AWS
 

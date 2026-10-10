@@ -183,7 +183,7 @@ button{font:inherit;color:inherit}
 .mapsvg{display:block;width:100%;min-width:600px;height:auto}
 .geo-map{height:430px;min-width:0;overflow:hidden;background:var(--map)}
 .geo-map .maplibregl-canvas{outline:none}
-.geo-bin{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;padding:0;border:0;background:transparent;cursor:pointer;color:var(--ink);font:500 10px var(--font-mono);white-space:nowrap}
+.geo-bin{position:relative;display:block;width:32px;height:32px;padding:0;border:0;background:transparent;cursor:pointer;color:var(--ink);font:500 10px var(--font-mono);white-space:nowrap}
 .geo-bin::before{content:attr(data-place);position:absolute;z-index:5;left:50%;bottom:calc(100% + 8px);transform:translate(-50%,4px);padding:8px 11px;border:1.5px solid var(--edge);border-radius:9px;background:var(--panel);color:var(--ink);box-shadow:3px 3px 0 var(--shadow);font:600 12px/1.25 var(--font-body);white-space:nowrap;opacity:0;visibility:hidden;transition:opacity .16s ease,transform .16s ease,visibility 0s .16s;pointer-events:none}
 .geo-bin::after{content:"";position:absolute;z-index:6;left:50%;bottom:calc(100% + 2px);width:9px;height:9px;border-right:1.5px solid var(--edge);border-bottom:1.5px solid var(--edge);background:var(--panel);transform:translate(-50%,4px) rotate(45deg);opacity:0;visibility:hidden;transition:opacity .16s ease,transform .16s ease,visibility 0s .16s;pointer-events:none}
 .geo-bin:hover::before,.geo-bin:focus-visible::before,.geo-bin:hover::after,.geo-bin:focus-visible::after{opacity:1;visibility:visible;transition-delay:0s}
@@ -193,7 +193,7 @@ button{font:inherit;color:inherit}
 .geo-bin.sel .geo-bin-ring{outline:3px solid var(--a);outline-offset:2px}
 .geo-bin.dim{opacity:.4}.geo-bin.dim.sel,.geo-bin.dim:hover{opacity:1}
 .geo-bin:hover .geo-bin-ring{transform:scale(1.08)}
-.geo-bin-label{padding:1px 3px;border-radius:3px;background:var(--panel);box-shadow:0 1px 3px #0003}
+.geo-bin-label{position:absolute;top:calc(100% + 3px);left:50%;transform:translateX(-50%);padding:1px 3px;border-radius:3px;background:var(--panel);box-shadow:0 1px 3px #0003}
 .geo-stop{position:absolute;top:-5px;right:-12px;display:grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--route);color:var(--route-ink);border:1px solid var(--panel);font:600 10px var(--font-mono)}
 .geo-stop.done{background:var(--c-low)}
 .geo-depot,.geo-truck{display:grid;place-items:center;width:28px;height:28px;border:2px solid var(--panel);border-radius:7px;background:var(--ink);color:var(--bg);box-shadow:0 1px 5px #0005;font:700 12px var(--font-mono)}
