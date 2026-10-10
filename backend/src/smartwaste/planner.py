@@ -12,7 +12,7 @@ import time
 
 from . import events, store
 from .model import derive
-from .routing import plan_stats, route_stops, select_bins
+from .routing import plan_stats, road_path, route_stops, select_bins
 
 
 def load(event, _ctx):
@@ -31,7 +31,11 @@ def select(event, _ctx):
 
 def route(event, _ctx):
     rt = route_stops(event["rows"], event["chosen"], event["config"]["lamPct"])
-    return {**event, **rt, **plan_stats(event["rows"], rt["route"], rt["km"])}
+    geometry = road_path(rt["route"], event["rows"])
+    routed = {**event, **rt, **plan_stats(event["rows"], rt["route"], rt["km"])}
+    if geometry is not None:
+        routed["roadPath"] = geometry
+    return routed
 
 
 def save(event, _ctx):
@@ -42,6 +46,7 @@ def save(event, _ctx):
         "planId": time.strftime("%Y%m%dT%H%M%SZ", now), "createdAt": store.now_iso(), "status": "active",
         "trigger": event.get("trigger", "api"), "by": event.get("by", ""),
         "route": event["route"], "cum": event["cum"], "km": event["km"], "baseKm": event["baseKm"],
+        **({"roadPath": event["roadPath"]} if "roadPath" in event else {}),
         "deferred": event["deferred"], "load": event["load"], "truckCap": event["config"]["truckCap"],
         "urgentN": event["urgentN"], "urgentC": event["urgentC"], "hpN": event["hpN"], "hpC": event["hpC"],
         "timeMin": event["timeMin"], "ticked": {},

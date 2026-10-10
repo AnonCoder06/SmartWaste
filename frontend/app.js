@@ -141,9 +141,12 @@ function renderGeoMap(side, layer, withRoute) {
   removeGeoLayer(map, side + '-depot-label'); removeGeoLayer(map, side + '-depot-circle');
   if (map.getSource(depotSourceId)) map.removeSource(depotSourceId);
   if (withRoute && plan && plan.route.length) {
-    var pts = [geoPoint(DEPOT)].concat(plan.route.map(function (id) { return binById(id); }).filter(Boolean).map(geoPoint), [geoPoint(DEPOT)]);
+    var pts = plan.roadPath;
+    if (!pts && !cloud()) pts = [geoPoint(DEPOT)].concat(plan.route.map(function (id) { return binById(id); }).filter(Boolean).map(geoPoint), [geoPoint(DEPOT)]);
+    if (pts && pts.length > 1) {
     map.addSource(srcId, { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: pts } } });
     map.addLayer({ id: srcId + '-line', type: 'line', source: srcId, layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': cssColor('--route'), 'line-width': 5, 'line-opacity': 0.9 } });
+    }
   }
   map.addSource(binsId, { type: 'geojson', data: { type: 'FeatureCollection', features: geoBinFeatures(layer, withRoute) } });
   map.addLayer({
@@ -247,7 +250,7 @@ function renderMaps() {
   var truck = '<g id="truck" style="display:none"><rect x="-11" y="-8" width="22" height="16" rx="4" fill="var(--route)" stroke="var(--panel)" stroke-width="2.5"/><rect x="3" y="-5" width="6" height="7" rx="1" fill="var(--panel)"/></g>';
   if (!geoMaps.c) $('#cMap').innerHTML = '<svg class="mapsvg" viewBox="40 40 960 570" role="group" aria-label="Map of waste bins and route">' + BASE + routeSVG() + depot + D.map(function (r) { return binSVG(r, lc, true); }).join('') + truck + '</svg>';
   else renderGeoMap('c', lc, true);
-  setSeg('#cLayers', lc); $('#cLegend').innerHTML = legendHTML(lc); $('#cCap').innerHTML = capText(lc) + '<br><small>Sample locations; route lines are straight overlays and distance estimates still use the demo street grid.</small>';
+  setSeg('#cLayers', lc); $('#cLegend').innerHTML = legendHTML(lc); $('#cCap').innerHTML = capText(lc) + '<br><small>' + (cloud() ? 'Amazon Location calculates the road-following path; stop order and distance estimates use the demo planner.' : 'Offline preview uses a schematic route; connect AWS to calculate a road-following path.') + '</small>';
   $('#btnPlay').disabled = !(plan && plan.route.length);
 }
 
@@ -459,7 +462,8 @@ function playRoute() {
   anim = requestAnimationFrame(step);
 }
 function playGeoRoute() {
-  var map = geoMaps.c, pts = [geoPoint(DEPOT)].concat(plan.route.map(function (id) { return binById(id); }).filter(Boolean).map(geoPoint), [geoPoint(DEPOT)]);
+  var map = geoMaps.c;
+  var pts = plan.roadPath || [geoPoint(DEPOT)].concat(plan.route.map(function (id) { return binById(id); }).filter(Boolean).map(geoPoint), [geoPoint(DEPOT)]);
   if (pts.length < 2) return;
   var pixels = pts.map(function (p) { return map.project(p); }), lens = [], total = 0;
   for (var i = 1; i < pixels.length; i++) { var dx = pixels[i].x - pixels[i - 1].x, dy = pixels[i].y - pixels[i - 1].y; lens.push(Math.sqrt(dx * dx + dy * dy)); total += lens[i - 1]; }

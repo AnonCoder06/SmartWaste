@@ -156,7 +156,14 @@ export class SmartWasteStack extends Stack {
     const loadFn = makeFn('PlanLoad', 'smartwaste.planner.load');
     const scoreFn = makeFn('PlanScore', 'smartwaste.planner.score');
     const selectFn = makeFn('PlanSelect', 'smartwaste.planner.select');
-    const routeFn = makeFn('PlanRoute', 'smartwaste.planner.route', { timeout: 30 });
+    const routeFn = makeFn('PlanRoute', 'smartwaste.planner.route', {
+      timeout: 60,
+      env: { ROUTING_ENABLED: 'true' },
+    });
+    routeFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['geo-routes:CalculateRoutes'],
+      resources: [`arn:${this.partition}:geo-routes:${this.region}::provider/default`],
+    }));
     const saveFn = makeFn('PlanSave', 'smartwaste.planner.save');
     table.grantReadData(loadFn);
     table.grantReadWriteData(saveFn);
@@ -197,6 +204,7 @@ export class SmartWasteStack extends Stack {
     // ------------------------------------------------------------------ API
     const apiFn = makeFn('ApiFn', 'smartwaste.api.handler', {
       env: { UPLOAD_BUCKET: uploads.bucketName, STATE_MACHINE_ARN: planner.stateMachineArn },
+      timeout: 30,
     });
     table.grantReadWriteData(apiFn);
     bus.grantPutEventsTo(apiFn);

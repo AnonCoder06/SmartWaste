@@ -16,7 +16,7 @@ The gateway offers two workspaces: **Report & Upload** for residents and volunte
 
 In Report & Upload, users select a bin on the map, then upload a photo or choose a sample image to estimate its fill level. Map markers show the place name on hover or keyboard focus. The map and photo report are placed before the overflow and priority summaries so the main reporting actions are easy to reach.
 
-The seeded bin markers use named Mo Bus stop coordinates from BhubaneswarOne's bus stop layer. The route planner still uses its sample street grid for distance estimates. The AWS map uses Amazon Location; local runs use the built-in sample map unless AWS map configuration is present.
+The seeded bin markers use named Mo Bus stop coordinates from BhubaneswarOne's bus stop layer. AWS planner runs ask Amazon Location Routes to calculate a road-following path through the ordered stops. The sample planner still supplies stop order and distance estimates; local runs use the built-in sample map unless AWS map configuration is present.
 
 ## What runs on AWS
 
@@ -120,7 +120,7 @@ The Python model and planner are a port of `frontend/engine.js`. `test_parity.py
 
 - **Fill estimate.** The built-in estimator measures edge density on a 64x64 grey thumbnail. It separates empty, half and overflowing bins in clean photos and is a baseline, not a trained model. Rekognition screens out non-bin photos. The SageMaker hook is wired and tested against a stub, but no model is deployed, because there are no labelled bin photos to train on. Correcting a wrong detection is one tap, and corrections replace the original report instead of stacking.
 - **Forecast.** Predicted fill is current fill plus fill rate times hours to collection. Fill does not yet grow by itself between reports.
-- **Data and map.** One demo neighbourhood of 24 bins. The browser places illustrative points over a sample area in Bengaluru on an Amazon Location basemap. Bin place names appear on marker hover or keyboard focus. The map shows the real street basemap, but the sample bin positions are not surveyed addresses. Routes use Manhattan distance on the demo grid, not road-network directions; displayed route lines connect stops directly.
+- **Data and map.** One demo neighbourhood of 24 bins mapped to named Bhubaneswar Mo Bus stop coordinates. The browser draws the Amazon Location basemap and road-following route geometry calculated by Amazon Location Routes. Bin place names appear on marker hover. Stop selection and order remain demo planner logic, and local offline runs use a schematic map.
 - **AWS integration.** The stack is deployed in `ap-south-1`. The deployment smoke check passed the API, S3 upload and analyzer path, reporting, planner, stop tracking, and reset flows. Its synthetic photo was correctly rejected as not showing a bin; a successful analysis of a real bin photo still needs to be checked in the live UI.
 
 ## Security notes

@@ -5,7 +5,9 @@ the street grid, which is what a truck driving a block grid actually travels.
 """
 from __future__ import annotations
 
-from .model import DEPOT, KM_PER_UNIT
+import os
+
+from .model import DEPOT, KM_PER_UNIT, SEED_SPEC
 
 
 def man(a: dict, b: dict) -> float:
@@ -103,6 +105,69 @@ def route_stops(rows: list[dict], chosen: list[dict], lam_pct: float) -> dict:
         cum.append(t)
         p = n
     return {"route": [n["id"] for n in route], "cum": cum, "km": d * KM_PER_UNIT, "baseKm": base * KM_PER_UNIT}
+
+
+def road_path(route_ids: list[str], rows: list[dict]) -> list[list[float]] | None:
+    """Return an Amazon Location road-following LineString for the chosen stop order.
+
+    Kept behind ROUTING_ENABLED so local/offline planning does not need AWS credentials.
+    CalculateRoutes accepts at most 25 positions per request, including both endpoints.
+    """
+    if os.environ.get("ROUTING_ENABLED", "").lower() != "true":
+        return None
+    if not route_ids:
+        return []
+
+    import boto3
+
+    seeds = {s[0]: s for s in SEED_SPEC}
+    by_id = {r["b"]["id"]: r["b"] for r in rows}
+
+    def position(bid: str) -> list[float]:
+        b = by_id[bid]
+        seed = seeds.get(bid)
+        lon = b.get("lon", seed[9] if seed else None)
+        lat = b.get("lat", seed[10] if seed else None)
+        if lon is None or lat is None:
+            raise ValueError(f"No geographic coordinates for route stop {bid}")
+        return [float(lon), float(lat)]
+
+    positions = [[float(DEPOT["lon"]), float(DEPOT["lat"])]]
+    positions.extend(position(bid) for bid in route_ids)
+    positions.append([float(DEPOT["lon"]), float(DEPOT["lat"])])
+    client = boto3.client("geo-routes")
+    path: list[list[float]] = []
+
+    # A request can contain 25 positions total (origin + up to 23 waypoints + destination).
+    # Split larger tours at an existing stop and join the returned leg geometries.
+    start = 0
+    while start < len(positions) - 1:
+        end = min(start + 24, len(positions) - 1)
+        segment = positions[start:end + 1]
+        response = client.calculate_routes(
+            Origin=segment[0],
+            Destination=segment[-1],
+            Waypoints=[{"Position": point} for point in segment[1:-1]],
+            TravelMode="Truck",
+            OptimizeRoutingFor="FastestRoute",
+            LegGeometryFormat="Simple",
+        )
+        routes = response.get("Routes", [])
+        if not routes:
+            raise RuntimeError("Amazon Location returned no road route")
+        for leg in routes[0].get("Legs", []):
+            line = leg.get("Geometry", {}).get("LineString", [])
+            if len(line) < 2:
+                continue
+            coords = [[float(point[0]), float(point[1])] for point in line]
+            if path and abs(path[-1][0] - coords[0][0]) < 1e-5 and abs(path[-1][1] - coords[0][1]) < 1e-5:
+                coords = coords[1:]
+            path.extend(coords)
+        start = end
+
+    if len(path) < 2:
+        raise RuntimeError("Amazon Location returned incomplete road geometry")
+    return path
 
 
 def plan_stats(rows: list[dict], route_ids: list[str], km: float) -> dict:
