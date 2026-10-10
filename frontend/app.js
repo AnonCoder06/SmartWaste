@@ -455,7 +455,45 @@ bind('#wP', function (v) { cfg.wts.pred = v; }); bind('#wC', function (v) { cfg.
 
 /* ------------------------------------------------------------------ gateway */
 var gate = $('#gate'), conL = $('#conL'), conR = $('#conR'), covL = $('#covL'), covR = $('#covR'), backBtn = $('#btnBack');
+var artTransition = null;
+function stopPanelArtTransition() {
+  if (!artTransition) return;
+  var fx = artTransition; artTransition = null;
+  fx.animation.cancel(); fx.fadeAnimation.cancel(); fx.source.classList.remove('art-transition-source'); fx.node.remove();
+}
+function animatePanelArt(side) {
+  stopPanelArtTransition();
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  var panel = side === 'l' ? $('#pL') : $('#pR'), source = panel.querySelector('.panel-art');
+  if (!source || !source.animate) return;
+  var rect = source.getBoundingClientRect(), node = document.createElement('div'), image = source.cloneNode();
+  node.className = 'panel-art-transition';
+  node.style.left = rect.left + 'px'; node.style.top = rect.top + 'px';
+  node.style.width = rect.width + 'px'; node.style.height = rect.height + 'px';
+  node.style.setProperty('--art-fade-color', getComputedStyle(panel).getPropertyValue('--bg').trim());
+  image.removeAttribute('class'); image.alt = ''; image.setAttribute('aria-hidden', 'true');
+  var fade = document.createElement('div'); fade.className = 'art-fade'; fade.setAttribute('aria-hidden', 'true');
+  node.appendChild(image); node.appendChild(fade); document.body.appendChild(node);
+  source.classList.add('art-transition-source');
+  var endHeight = Math.round(window.innerHeight * 0.75), fullWidth = window.innerWidth, fullHeight = window.innerHeight;
+  var fx = { node: node, source: source };
+  fx.animation = node.animate([
+    { left: rect.left + 'px', top: rect.top + 'px', width: rect.width + 'px', height: rect.height + 'px', opacity: 1, offset: 0 },
+    { left: '0px', top: '0px', width: fullWidth + 'px', height: fullHeight + 'px', opacity: 1, offset: 0.38 },
+    { left: '0px', top: '0px', width: fullWidth + 'px', height: endHeight + 'px', opacity: 1, offset: 0.62 },
+    { left: '0px', top: '0px', width: fullWidth + 'px', height: endHeight + 'px', opacity: 0, offset: 1 }
+  ], { duration: 2800, easing: 'cubic-bezier(.2,.72,.2,1)', fill: 'forwards' });
+  fx.fadeAnimation = fade.animate([
+    { opacity: 0, offset: 0 }, { opacity: 0, offset: 0.32 }, { opacity: 1, offset: 0.68 }, { opacity: 1, offset: 1 }
+  ], { duration: 2800, easing: 'ease-in-out', fill: 'forwards' });
+  artTransition = fx;
+  fx.animation.onfinish = function () {
+    if (artTransition !== fx) return;
+    artTransition = null; fx.source.classList.remove('art-transition-source'); fx.node.remove();
+  };
+}
 function setOpen(side, instant) {
+  if (!side) stopPanelArtTransition();
   if (side) { gate.setAttribute('data-open', side); gate.removeAttribute('data-returning'); }
   else { gate.removeAttribute('data-open'); gate.setAttribute('data-returning', ''); }
   conL.inert = side !== 'l'; conR.inert = side !== 'r';
@@ -472,6 +510,7 @@ function resumeCoverHover() { if (gate.hasAttribute('data-returning')) gate.remo
 gate.addEventListener('pointermove', resumeCoverHover);
 document.addEventListener('keydown', resumeCoverHover);
 function enter(side) {
+  animatePanelArt(side);
   setOpen(side);
 }
 function wireCover(el, side) {
