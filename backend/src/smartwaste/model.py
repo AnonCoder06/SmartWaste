@@ -7,7 +7,7 @@ from __future__ import annotations
 
 GRID = 80
 KM_PER_UNIT = 1.875 / 1000
-DEPOT = {"id": "DEPOT", "x": 80, "y": 560, "w": 0}
+DEPOT = {"id": "DEPOT", "x": 80, "y": 560, "lon": 85.79385141, "lat": 20.27105111, "w": 0}
 
 DEFAULT_CONFIG = {
     "H": 8,
@@ -23,27 +23,29 @@ LEVELS = [
     {"n": "Overflowing", "v": 105},
 ]
 
-# id, name, grid x, grid y, capacity (L), fill %, fill rate (%/h), hours since pickup, reports
+# id, name, grid x, grid y, capacity, fill %, rate, since, reports, Mo Bus stop longitude, latitude
+# Coordinates are from BhubaneswarOne's UpdatedBusStops ArcGIS Bus_Stops layer (keyword: mobus).
+# https://bhubaneswarone.in/arcgis/rest/services/BhubaneswarOne/UpdatedBusStops/MapServer/3
 SEED_SPEC = [
-    ("B-01", "Market Gate", 2, 1, 660, 40, 1.2, 20, 0), ("B-02", "Temple Road", 4, 1, 660, 55, 1.8, 30, 1),
-    ("B-03", "Bus Stand", 7, 1, 1100, 82, 2.2, 36, 2), ("B-04", "School Lane", 10, 1, 240, 35, 0.9, 18, 0),
-    ("B-05", "North Park", 3, 2, 240, 20, 0.6, 12, 0), ("B-06", "Clinic Corner", 6, 2, 660, 66, 1.5, 28, 1),
-    ("B-07", "Vegetable Mart", 11, 2, 1100, 48, 2.6, 24, 0), ("B-08", "Food Street", 5, 3, 660, 72, 2.4, 40, 2),
-    ("B-09", "Ward Office", 8, 3, 240, 30, 0.8, 14, 0), ("B-10", "Community Hall", 12, 3, 1100, 90, 1.0, 44, 3),
-    ("B-11", "Temple Tank", 3, 4, 660, 58, 0.7, 26, 0), ("B-12", "Station Road", 10, 4, 660, 75, 0.9, 30, 1),
-    ("B-13", "Hostel Row", 2, 5, 660, 44, 1.1, 22, 0), ("B-14", "Canteen Chowk", 6, 5, 1100, 70, 3.0, 24, 1),
-    ("B-15", "Metro Stop", 8, 5, 660, 25, 0.5, 10, 0), ("B-16", "Apartments C", 11, 5, 660, 52, 2.0, 32, 0),
-    ("B-17", "Fish Market", 4, 6, 1100, 78, 3.1, 38, 2), ("B-18", "Bakery Lane", 7, 6, 660, 38, 1.4, 20, 0),
-    ("B-19", "Bridge End", 12, 6, 240, 15, 0.4, 8, 0), ("B-20", "Library Gate", 3, 7, 660, 62, 1.7, 26, 1),
-    ("B-21", "Petrol Pump", 6, 7, 660, 85, 0.8, 42, 1), ("B-22", "Sports Ground", 9, 7, 660, 28, 1.0, 16, 0),
-    ("B-23", "Old Bazaar", 11, 7, 660, 61, 1.9, 30, 0), ("B-24", "Post Office", 5, 4, 240, 33, 1.3, 18, 0),
+    ("B-01", "Jaydev Vihar", 2, 1, 660, 40, 1.2, 20, 0, 85.82429129, 20.29459375), ("B-02", "Aacharya Vihar Square", 4, 1, 660, 55, 1.8, 30, 1, 85.83249756, 20.29676224),
+    ("B-03", "Vani Vihar Square", 7, 1, 1100, 82, 2.2, 36, 2, 85.84290691, 20.29642195), ("B-04", "Master Canteen", 10, 1, 240, 35, 0.9, 18, 0, 85.84038997, 20.26689536),
+    ("B-05", "Rasulgarh Square", 3, 2, 240, 20, 0.6, 12, 0, 85.85717592, 20.29431609), ("B-06", "Satya Nagar Square", 6, 2, 660, 66, 1.5, 28, 1, 85.84362874, 20.27968040),
+    ("B-07", "Bomikhal", 11, 2, 1100, 48, 2.6, 24, 0, 85.85759609, 20.28742953), ("B-08", "Rajmahal Square", 5, 3, 660, 72, 2.4, 40, 2, 85.83628897, 20.26069145),
+    ("B-09", "AG Square", 8, 3, 240, 30, 0.8, 14, 0, 85.82893453, 20.26682667), ("B-10", "Kalpana Square", 12, 3, 1100, 90, 1.0, 44, 3, 85.84173369, 20.25871046),
+    ("B-11", "Shishu Bhawan", 3, 4, 660, 58, 0.7, 26, 0, 85.83252832, 20.25596667), ("B-12", "Unit 8 Square", 10, 4, 660, 75, 0.9, 30, 1, 85.81699794, 20.27585624),
+    ("B-13", "Fire Station Square", 2, 5, 660, 44, 1.1, 22, 0, 85.79864937, 20.27914711), ("B-14", "Capital Hospital", 6, 5, 1100, 70, 3.0, 24, 1, 85.82434309, 20.25971552),
+    ("B-15", "Iskcon Temple", 8, 5, 660, 25, 0.5, 10, 0, 85.81398375, 20.28897098), ("B-16", "Satsang Vihar", 11, 5, 660, 52, 2.0, 32, 0, 85.84609095, 20.29563748),
+    ("B-17", "VSS Nagar Market", 4, 6, 1100, 78, 3.1, 38, 2, 85.84641562, 20.31054214), ("B-18", "Nayapalli", 7, 6, 660, 38, 1.4, 20, 0, 85.81110606, 20.28673681),
+    ("B-19", "Khandagiri Square", 12, 6, 240, 15, 0.4, 8, 0, 85.78899412, 20.25847954), ("B-20", "Bhubaneswar Club", 3, 7, 660, 62, 1.7, 26, 1, 85.82791188, 20.26783797),
+    ("B-21", "OUAT Square", 6, 7, 660, 85, 0.8, 42, 1, 85.81007218, 20.26798698), ("B-22", "Laxmi Sagar", 9, 7, 660, 28, 1.0, 16, 0, 85.84886868, 20.26881588),
+    ("B-23", "BJB College", 11, 7, 660, 61, 1.9, 30, 0, 85.84118891, 20.25339626), ("B-24", "Power House Square", 5, 4, 240, 33, 1.3, 18, 0, 85.82537280, 20.27351130),
 ]
 
 
 def seed_bins() -> list[dict]:
     return [
         {"id": s[0], "name": s[1], "x": s[2] * GRID, "y": s[3] * GRID, "cap": s[4],
-         "cur": s[5], "rate": s[6], "since": s[7], "rep": s[8]}
+         "cur": s[5], "rate": s[6], "since": s[7], "rep": s[8], "lon": s[9], "lat": s[10]}
         for s in SEED_SPEC
     ]
 

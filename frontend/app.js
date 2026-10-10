@@ -74,9 +74,7 @@ var BASE = (function () {
 })();
 function colorOf(k) { return 'var(--c-' + k + ')'; }
 function geoPoint(b) {
-  // The sample grid is placed over a small demo area in Bengaluru. These are
-  // illustrative locations, not surveyed collection addresses.
-  return [77.5946 + (b.x / GRID - 6.5) * 0.00135, 12.9716 + (3.5 - b.y / GRID) * 0.00135];
+  return [b.lon || 85.835, b.lat || 20.275];
 }
 function cssColor(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 function geoMarkerHTML(r, layer, withRoute) {
@@ -120,7 +118,7 @@ function initGeoMaps(mapConfig) {
       $(side === 'r' ? '#rMap' : '#cMap').innerHTML = '';
       var map = new maplibregl.Map({
         container: side === 'r' ? 'rMap' : 'cMap',
-        center: [77.5946, 12.9716], zoom: 14.4,
+        center: [85.835, 20.278], zoom: 12.4,
         style: 'https://maps.geo.' + mapConfig.region + '.amazonaws.com/v2/styles/' + mapConfig.style + '/descriptor',
         attributionControl: true,
         transformRequest: auth.getMapAuthenticationOptions().transformRequest,
