@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>SmartWaste</title>
+<meta name="description" content="SmartWaste predicts which bins will overflow by morning and plans the shortest truck route to empty them.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='9' fill='%230e6a5a'/%3E%3Cpath d='M13 14h14l-1.400 15a2 2 0 0 1-2 1.800h-7.200a2 2 0 0 1-2-1.800L13 14Z' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Schibsted+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main class="gate" id="gate">
+  <section class="panel p-l" id="pL" aria-label="Community Contributor portal">
+    <div class="cover cv-l" id="covL" role="button" tabindex="0" aria-label="Open the Community Contributor portal: report and upload">
+      <div class="cv-in">
+        <div class="cv-ico" aria-hidden="true">
+          <svg width="40" height="40" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17h20l-1.8 15a2.4 2.4 0 0 1-2.4 2.1h-11.6A2.4 2.4 0 0 1 11.8 32L10 17Z"/><path d="M8 17h24M16.5 17v-3h7v3"/><circle cx="20" cy="26" r="4"/><path d="M28 6v7M24.5 9.5h7"/></svg>
+        </div>
+        <p class="cv-tag">For residents and volunteers</p>
+        <h2>Report &amp; Upload</h2>
+        <p class="alt">Community Contributor</p>
+        <p class="sub">Submit bin photos, trigger fill-level analysis, and update real-time site data.</p>
+        <span class="cv-live"><i></i><span id="liveL">24 bins reporting</span></span>
+        <span class="cv-cta">Open reporter <span aria-hidden="true">&rarr;</span></span>
+      </div>
+    </div>
+    <div class="console" id="conL" inert>
+      <div class="wrap">
+        <div class="c-head">
+          <div><p class="eyebrow">Community Contributor</p><h1>Report &amp; Upload</h1><p>Pick a bin on the map, add a photo, and the forecast for tomorrow morning updates straight away.</p></div>
+        </div>
+        <div class="banner" id="bnL" role="status" hidden></div>
+        <div class="pulse" id="rPulse"></div>
+        <div class="grid2">
+          <div class="card" style="overflow:hidden">
+            <div class="maptools">
+              <div class="layerpick"><span class="lbl">Map shows</span>
+                <div class="seg" role="group" aria-label="Map layer" id="rLayers"><button data-l="cur" aria-pressed="true">Fill now</button><button data-l="pred" aria-pressed="false">By morning</button></div>
+              </div>
+              <span class="muted" style="font-size:13px">Click a bin to select it</span>
+            </div>
+            <div class="caption"><p id="rCap"></p><div class="legend" id="rLegend"></div></div>
+            <div class="mapwrap"><svg class="mapsvg" id="rMap" viewBox="40 40 960 570" role="group" aria-label="Map of waste bins"></svg></div>
+          </div>
+          <div class="col">
+            <section class="card pad" aria-label="Selected bin"><div id="rInsp" aria-live="polite"></div></section>
+            <section class="card pad" aria-label="Photo report"><div id="rRep" style="display:flex;flex-direction:column;gap:14px" aria-live="polite"></div></section>
+          </div>
+        </div>
+        <p class="foot">SmartWaste v2.0.0</p>
+      </div>
+    </div>
+    <div class="deny" id="denyL" hidden></div>
+  </section>
+
+  <section class="panel p-r" id="pR" aria-label="Field Operations portal">
+    <div class="cover cv-r" id="covR" role="button" tabindex="0" aria-label="Open the Field Operations and Dispatch console">
+      <svg class="trace" viewBox="0 0 600 800" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><path d="M-20 700 H140 V520 H320 V300 H480 V120 H640" fill="none" stroke="var(--cv-r-acc)" stroke-width="3" stroke-dasharray="2 12" stroke-linecap="round" opacity=".5"/><g fill="var(--cv-r-acc)" opacity=".6"><circle cx="140" cy="520" r="6"/><circle cx="320" cy="300" r="6"/><circle cx="480" cy="120" r="6"/></g></svg>
+      <div class="cv-in">
+        <div class="cv-ico" aria-hidden="true">
+          <svg width="40" height="40" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="15" width="19" height="13" rx="2.5"/><path d="M22 18h6l5 5v5H22z"/><circle cx="10" cy="30" r="3"/><circle cx="28" cy="30" r="3"/><path d="M26 3.5a5 5 0 0 1 5 5c0 3.4-5 7.5-5 7.5s-5-4.100-5-7.500a5 5 0 0 1 5-5Z" transform="translate(0 -1)"/></svg>
+        </div>
+        <p class="cv-tag">For collection crews</p>
+        <h2>Field Operations &amp; Dispatch</h2>
+        <p class="alt">Collector Console</p>
+        <p class="sub">View optimized collection routes, priority-ranked bins, and live task lists.</p>
+        <span class="cv-live"><i></i><span id="liveR">Planner ready</span></span>
+        <span class="cv-cta">Open console <span aria-hidden="true">&rarr;</span></span>
+      </div>
+    </div>
+    <div class="console" id="conR" inert>
+      <div class="wrap">
+        <div class="c-head">
+          <div><p class="eyebrow">Collector Console</p><h1>Field Operations &amp; Dispatch</h1><p>Run the nightly planner to rank bins and route the truck. Tick stops off as the crew works through them.</p></div>
+          <div class="head-actions">
+            <div class="clock"><span id="clockLbl">Planner time</span><b id="clock">Mon 22:00</b></div>
+            <button class="btn ghost" id="btnReset">Reset data</button>
+          </div>
+        </div>
+        <div class="banner" id="bnR" role="status" hidden></div>
+        <div class="head-actions">
+          <button class="btn primary" id="btnPlan">Run nightly planner</button>
+          <button class="btn" id="btnCollect" disabled>Mark collection done</button>
+          <button class="btn" id="btnPlay" disabled>Play route</button>
+        </div>
+        <div id="cStats" aria-live="polite"></div>
+        <div class="grid2">
+          <div class="card" style="overflow:hidden">
+            <div class="maptools">
+              <div class="layerpick"><span class="lbl">Map shows</span>
+                <div class="seg" role="group" aria-label="Map layer" id="cLayers"><button data-l="cur" aria-pressed="false">Fill now</button><button data-l="pred" aria-pressed="false">By morning</button><button data-l="prio" aria-pressed="true">Priority</button></div>
+              </div>
+            </div>
+            <div class="caption"><p id="cCap"></p><div class="legend" id="cLegend"></div></div>
+            <div class="mapwrap"><svg class="mapsvg" id="cMap" viewBox="40 40 960 570" role="group" aria-label="Map of waste bins and route"></svg></div>
+          </div>
+          <div class="col">
+            <section class="card pad" aria-label="Task list">
+              <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px"><h3 style="font-size:20px">Today's task list</h3><span class="muted mono" id="cProg" style="font-size:12.5px"></span></div>
+              <div class="progress" aria-hidden="true"><i id="cProgBar" style="width:0"></i></div>
+              <div id="cTasks"></div>
+            </section>
+            <section class="card pad" aria-label="Selected bin"><div id="cInsp" aria-live="polite"></div></section>
+          </div>
+        </div>
+        <section class="card pad" aria-labelledby="planTitle">
+          <div><p class="eyebrow">Full list</p><h2 id="planTitle" style="font-size:24px;margin-top:2px">Bins ranked by priority</h2><p class="muted" id="planSub" style="margin-top:4px;font-size:13.5px"></p></div>
+          <div class="tablewrap"><table id="tbl"></table></div>
+        </section>
+        <details class="card tune">
+          <summary>Tune the model</summary>
+          <div class="tune-body">
+            <h3>Prediction and truck</h3>
+            <div class="ctl"><label for="sH">Hours until collection <output id="oH"></output></label><input type="range" id="sH" min="4" max="12" step="1"><small>Predicted fill = current fill + fill rate × hours.</small></div>
+            <div class="ctl"><label for="sCap">Truck capacity <output id="oCap"></output></label><input type="range" id="sCap" min="3000" max="12000" step="500"><small>Medium bins are only added while there is room.</small></div>
+            <div class="ctl"><label for="sLam">Route emphasis <output id="oLam"></output></label><input type="range" id="sLam" min="0" max="100" step="5"><small>Left: shortest distance. Right: urgent bins first.</small></div>
+            <h3>Priority score weights</h3>
+            <div class="ctl"><label for="wP">Predicted fill <output id="oP"></output></label><input type="range" id="wP" min="0" max="100"></div>
+            <div class="ctl"><label for="wC">Current fill <output id="oC"></output></label><input type="range" id="wC" min="0" max="100"></div>
+            <div class="ctl"><label for="wT">Time since collection <output id="oT"></output></label><input type="range" id="wT" min="0" max="100"></div>
+            <div class="ctl"><label for="wR">Report and overflow risk <output id="oR"></output></label><input type="range" id="wR" min="0" max="100"></div>
+          </div>
+        </details>
+        <p class="foot">SmartWaste v2.0.0</p>
+      </div>
+    </div>
+    <div class="deny" id="denyR" hidden></div>
+  </section>
+
+  <div class="brand" aria-hidden="true">
+    <svg width="26" height="26" viewBox="0 0 40 40"><rect x="2" y="2" width="36" height="36" rx="9" fill="var(--teal)"/><path d="M13 14h14l-1.4 15a2 2 0 0 1-2 1.800h-7.200a2 2 0 0 1-2-1.800L13 14Z" fill="none" stroke="var(--teal-ink)" stroke-width="2" stroke-linejoin="round"/><path d="M11.500 14h17M17 14v-2.200h6V14" fill="none" stroke="var(--teal-ink)" stroke-width="2" stroke-linecap="round"/></svg>
+    SmartWaste
+  </div>
+</main>
+
+<button class="back" id="btnBack" type="button"><span aria-hidden="true">&larr;</span> Back to Gateway</button>
+<div class="chrome-r">
+  <span class="mode-pill" id="modePill" hidden title="No cloud backend was found, so data stays in this browser tab.">Offline demo</span>
+  <div class="userchip" id="userChip" hidden><span class="who mono" id="userWho"></span><span class="role" id="userRole"></span><button type="button" class="btn ghost" id="btnSignOut">Sign out</button></div>
+  <div class="seg" role="group" aria-label="Colour theme" id="themeSeg"><button data-t="light" aria-pressed="false">Light</button><button data-t="dark" aria-pressed="false">Dark</button></div>
+</div>
+<dialog class="auth" id="authDlg" aria-labelledby="authTitle">
+  <form id="authForm" method="dialog" novalidate>
+    <div class="auth-head"><h2 id="authTitle">Sign in</h2><button type="button" class="x" id="authClose" aria-label="Close">&times;</button></div>
+    <p class="auth-why" id="authWhy"></p>
+    <div class="seg auth-tabs" role="group" aria-label="Sign in or create account" id="authTabs"><button type="button" data-m="in" aria-pressed="true">Sign in</button><button type="button" data-m="up" aria-pressed="false">Create account</button></div>
+    <div class="field"><label for="authEmail">Email</label><input id="authEmail" type="email" autocomplete="username" required></div>
+    <div class="field" id="pwField"><label for="authPw">Password</label><input id="authPw" type="password" autocomplete="current-password" required minlength="8"><small id="pwHint" hidden>At least 8 characters, with upper and lower case, a number and a symbol.</small></div>
+    <div class="field" id="codeField" hidden><label for="authCode">Confirmation code</label><input id="authCode" inputmode="numeric" autocomplete="one-time-code"><small>We emailed a 6-digit code to the address above.</small></div>
+    <p class="auth-err" id="authErr" role="alert" hidden></p>
+    <div class="auth-actions"><button type="submit" class="btn primary" id="authGo">Sign in</button><button type="button" class="btn ghost" id="authResend" hidden>Send a new code</button></div>
+    <div class="auth-demo" id="authDemo" hidden><p>Judges and testers</p><div id="authDemoBtns"></div></div>
+  </form>
+</dialog>
+<div id="toast" role="status"></div>
+
+<script src="engine.js"></script>
+<script src="api.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

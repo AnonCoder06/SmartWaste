@@ -1,0 +1,9 @@
+node_modules/
+cdk.out/
+cdk.context.json
+cdk-outputs.json
+backend/layer/
+__pycache__/
+*.pyc
+dev/shots/
+.venv/
