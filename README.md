@@ -4,7 +4,15 @@ Predicts which bins will overflow by morning, then plans the shortest truck rout
 
 Residents photograph a bin. A cloud pipeline estimates how full it is, updates the forecast, and warns the crew if it will overflow. Every night a workflow ranks all bins by priority, fills the truck, orders the stops and puts the route on the collector's task list.
 
-Built for the WeMakeDevs x AWS hackathon, **Ship It** track: deployed on AWS, with a URL.
+Built for the WeMakeDevs x AWS hackathon, **Ship It** track. The AWS deployment is deferred while the MVP is developed and tested locally.
+
+## Current interface
+
+The gateway offers two workspaces: **Report & Upload** for residents and volunteers, and **Field Operations & Dispatch** for collection teams. The selected gateway photo expands with its panel and remains as a faint background behind the workspace content. The SmartWaste logo stays centered at the top of the gateway.
+
+In Report & Upload, users select a bin on the map, then upload a photo or choose a sample image to estimate its fill level. Map markers show the place name on hover or keyboard focus. The map and photo report are placed before the overflow and priority summaries so the main reporting actions are easy to reach.
+
+The sample bin locations are illustrative points in a Bengaluru demo neighborhood, not real collection addresses. The AWS map uses Amazon Location; local runs use the built-in sample map unless AWS map configuration is present.
 
 ## What runs on AWS
 
@@ -53,20 +61,19 @@ No servers, no VPC, no NAT. Map tiles are billed by Amazon Location usage; the b
 
 **Access.** The MVP has no login or role checks. Anyone who can reach the site can report bins, upload photos, change shared planner settings, run collections and reset the shared demo data.
 
-## Deploy
+## Deploy after the MVP
 
-The easiest route is **AWS CloudShell** (console toolbar, top right). It already has the AWS CLI, Node and Python, and it is already signed in.
+AWS deployment is intentionally postponed until the MVP is ready. Local development and demos do not require AWS credentials. When deployment is approved, the CDK scripts below deploy the static frontend, API and supporting services.
+
+Run deployment from your own computer with the AWS CLI configured for the account and region you intend to use. Node 20+ and Python 3.9+ are also required. On Windows, use WSL or Git Bash.
 
 ```bash
-# in CloudShell: upload and unzip the project, then
-cd smartwaste-aws
+# from the project directory on your computer
 export ALERT_EMAIL=you@example.com            # optional: overflow and nightly-plan emails
 scripts/deploy.sh
 ```
 
-On your own machine you need Node 20+, Python 3.9+ and the AWS CLI configured (`aws configure`). Use Git Bash or WSL on Windows.
-
-The script runs the backend tests, builds the Pillow layer for Lambda, bootstraps CDK, deploys, prints the **live URL**, and runs the smoke test without requiring an account. Expect 8 to 12 minutes the first time, mostly CloudFront.
+The script runs the backend tests, builds the Pillow layer for Lambda, bootstraps CDK, deploys, prints the **live URL**, and runs the smoke test without requiring a SmartWaste login. AWS CLI credentials are still required. Expect 8 to 12 minutes the first time, mostly CloudFront.
 
 After deploying:
 
@@ -86,7 +93,15 @@ After deploying:
 python3 dev/server.py            # http://localhost:8787
 ```
 
-The dev server serves the front end, runs the real Lambda handlers on in-memory stand-ins for DynamoDB, S3, Step Functions and Rekognition, and exposes the API without login. `python3 dev/server.py --local` serves no `config.json`, so the page falls back to its offline demo with data in the browser.
+The dev server serves the front end and runs the real Lambda handlers against in-memory stand-ins for DynamoDB, S3, Step Functions and Rekognition. This exercises the API and photo-report flow locally without AWS credentials. The application has no login; the local API is available to anyone who can reach the development server.
+
+For a browser-only offline demo, run:
+
+```bash
+python3 dev/server.py --local  # http://localhost:8787
+```
+
+This omits `config.json`, so the frontend uses in-browser sample data and the built-in sample map. Changes in this mode are temporary and reset when the page is reloaded. Neither local mode deploys or writes data to AWS.
 
 ## Tests
 
@@ -102,7 +117,7 @@ The Python model and planner are a port of `frontend/engine.js`. `test_parity.py
 
 - **Fill estimate.** The built-in estimator measures edge density on a 64x64 grey thumbnail. It separates empty, half and overflowing bins in clean photos and is a baseline, not a trained model. Rekognition screens out non-bin photos. The SageMaker hook is wired and tested against a stub, but no model is deployed, because there are no labelled bin photos to train on. Correcting a wrong detection is one tap, and corrections replace the original report instead of stacking.
 - **Forecast.** Predicted fill is current fill plus fill rate times hours to collection. Fill does not yet grow by itself between reports.
-- **Data and map.** One demo neighbourhood of 24 bins. The browser places illustrative points over a sample area in Bengaluru on an Amazon Location basemap. The map shows the real street basemap, but the sample bin positions are not surveyed addresses. Routes use Manhattan distance on the demo grid, not road-network directions; displayed route lines connect stops directly.
+- **Data and map.** One demo neighbourhood of 24 bins. The browser places illustrative points over a sample area in Bengaluru on an Amazon Location basemap. Bin place names appear on marker hover or keyboard focus. The map shows the real street basemap, but the sample bin positions are not surveyed addresses. Routes use Manhattan distance on the demo grid, not road-network directions; displayed route lines connect stops directly.
 - **Not run in the authoring sandbox.** The CDK stack was written without access to npm or PyPI, so `cdk synth` and a real deploy have not been run. The stack file parses and its API routes match the backend route table exactly. The backend runs against faithful in-memory stand-ins, which check logic and DynamoDB expression shapes but not AWS itself. `scripts/smoke.py` is the check against the real thing: run it right after the first deploy. If `cdk deploy` reports a type error, it will point at a line in `infra/lib/smartwaste-stack.ts`.
 
 ## Security notes
@@ -115,7 +130,7 @@ The judges score idea and impact, use of AWS, design, execution, and the video. 
 
 | Time | Show | Say |
 |---|---|---|
-| 0:00 | Gateway page, hover each side | "Bins overflow because trucks go by schedule, not by need. SmartWaste predicts which bins need emptying tonight and routes the truck to them." |
+| 0:00 | Gateway page, hover each side and a map marker | "Bins overflow because trucks go by schedule, not by need. SmartWaste predicts which bins need emptying tonight and routes the truck to them." |
 | 0:20 | Open the reporter side, pick bin B-05, upload a photo | "A resident photographs a bin. The photo goes straight to S3 with a presigned URL." |
 | 0:50 | Result card, priority jumps, then the CloudWatch dashboard | "S3 triggers SQS, a Lambda checks the photo with Rekognition, estimates the fill and updates DynamoDB. A dead-letter queue and alarms catch failures." |
 | 1:20 | Collector side, run the planner | "Step Functions scores every bin, fills the truck, and only then optimises the route." |
@@ -133,9 +148,10 @@ The judges score idea and impact, use of AWS, design, execution, and the video. 
 ## Layout
 
 ```
-frontend/   static site: index.html, styles.css, app.js (UI), api.js (API + offline backend), engine.js (model)
+frontend/   static site: index.html, styles.css, app.js (UI), api.js (API + offline backend), engine.js (model), assets/ (gateway photos)
 backend/    Python 3.12 Lambdas in src/smartwaste, tests in tests/, in-memory AWS stand-ins in tests/fakeaws
 infra/      AWS CDK app (TypeScript), one stack
 scripts/    deploy.sh, destroy.sh, build-layer.sh, smoke.py
 dev/        local server and browser tests
+incoming_updates/  drop location for update ZIPs before applying their changes
 ```
