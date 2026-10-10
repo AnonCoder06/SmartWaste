@@ -545,7 +545,8 @@ $('#denyR').addEventListener('click', function (e) {
   else { Api.auth.signOut(); setOpen(null); renderChrome(); setTimeout(function () { enter('r'); }, 60); }
 });
 function setOpen(side, instant) {
-  if (side) gate.setAttribute('data-open', side); else gate.removeAttribute('data-open');
+  if (side) { gate.setAttribute('data-open', side); gate.removeAttribute('data-returning'); }
+  else { gate.removeAttribute('data-open'); gate.setAttribute('data-returning', ''); }
   conL.inert = side !== 'l'; conR.inert = side !== 'r';
   covL.inert = !!side; covR.inert = !!side; backBtn.inert = !side;
   $('#denyR').inert = side !== 'r';
@@ -557,6 +558,9 @@ function setOpen(side, instant) {
   }
   try { history.replaceState(null, '', side ? (side === 'l' ? '#reporter' : '#collector') : location.pathname + location.search); } catch (e) {}
 }
+function resumeCoverHover() { if (gate.hasAttribute('data-returning')) gate.removeAttribute('data-returning'); }
+gate.addEventListener('pointermove', resumeCoverHover);
+document.addEventListener('keydown', resumeCoverHover);
 function enter(side) {
   if (cloud() && !Api.auth.session()) { askAuth(side).then(function (ok) { if (ok) setOpen(side); }); return; }
   setOpen(side);

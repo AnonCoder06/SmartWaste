@@ -50,8 +50,8 @@ button{font:inherit;color:inherit}
 .gate{position:fixed;inset:0;overflow:hidden;--s:50vw;--k:7vw;
   transition:--s .85s cubic-bezier(.72,0,.18,1),--k .85s cubic-bezier(.72,0,.18,1)}
 @media (hover:hover) and (min-width:761px){
-  .gate:not([data-open]):has(.p-l:hover,.p-l:focus-within){--s:60vw}
-  .gate:not([data-open]):has(.p-r:hover,.p-r:focus-within){--s:40vw}
+  .gate:not([data-open]):not([data-returning]):has(.p-l:hover,.p-l:focus-within){--s:60vw}
+  .gate:not([data-open]):not([data-returning]):has(.p-r:hover,.p-r:focus-within){--s:40vw}
 }
 .gate[data-open="l"]{--s:100vw;--k:0px}
 .gate[data-open="r"]{--s:0vw;--k:0px}
