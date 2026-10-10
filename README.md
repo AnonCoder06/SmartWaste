@@ -1,5 +1,9 @@
 # SmartWaste
 
+## Website description
+
+SmartWaste is a waste reporting and collection planning website for residents, volunteers, and field operations teams. Residents can find a bin on the map and submit a photo to estimate its fill level. Collection teams can see which bins need attention, plan an efficient route, and track completed stops. The goal is to help crews prioritize overflowing bins and avoid unnecessary pickups.
+
 Predicts which bins will overflow by morning, then plans the shortest truck route that reaches the urgent ones first.
 
 Residents photograph a bin. A cloud pipeline estimates how full it is, updates the forecast, and warns the crew if it will overflow. Every night a workflow ranks all bins by priority, fills the truck, orders the stops and puts the route on the collector's task list.
