@@ -478,14 +478,15 @@ function animatePanelArt(side) {
   var endHeight = Math.round(window.innerHeight * 0.75), fullWidth = window.innerWidth, fullHeight = window.innerHeight;
   var fx = { node: node, source: source };
   fx.animation = node.animate([
-    { left: rect.left + 'px', top: rect.top + 'px', width: rect.width + 'px', height: rect.height + 'px', opacity: 1, offset: 0 },
-    { left: '0px', top: '0px', width: fullWidth + 'px', height: fullHeight + 'px', opacity: 1, offset: 0.38 },
-    { left: '0px', top: '0px', width: fullWidth + 'px', height: endHeight + 'px', opacity: 1, offset: 0.62 },
-    { left: '0px', top: '0px', width: fullWidth + 'px', height: endHeight + 'px', opacity: 0, offset: 1 }
-  ], { duration: 2800, easing: 'cubic-bezier(.2,.72,.2,1)', fill: 'forwards' });
+    { left: rect.left + 'px', top: rect.top + 'px', width: rect.width + 'px', height: rect.height + 'px', offset: 0 },
+    { left: '0px', top: '0px', width: fullWidth + 'px', height: fullHeight + 'px', offset: 0.38 },
+    { left: '0px', top: '0px', width: fullWidth + 'px', height: endHeight + 'px', offset: 0.58 },
+    { left: '0px', top: '0px', width: fullWidth + 'px', height: endHeight + 'px', offset: 0.68 },
+    { left: '0px', top: -endHeight + 'px', width: fullWidth + 'px', height: endHeight + 'px', offset: 1 }
+  ], { duration: 3000, easing: 'cubic-bezier(.2,.72,.2,1)', fill: 'forwards' });
   fx.fadeAnimation = fade.animate([
-    { opacity: 0, offset: 0 }, { opacity: 0, offset: 0.32 }, { opacity: 1, offset: 0.68 }, { opacity: 1, offset: 1 }
-  ], { duration: 2800, easing: 'ease-in-out', fill: 'forwards' });
+    { opacity: 0, offset: 0 }, { opacity: 0, offset: 0.44 }, { opacity: 1, offset: 0.68 }, { opacity: 1, offset: 1 }
+  ], { duration: 3000, easing: 'ease-in-out', fill: 'forwards' });
   artTransition = fx;
   fx.animation.onfinish = function () {
     if (artTransition !== fx) return;
