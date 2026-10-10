@@ -1,12 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { CfnOutput, Duration, Fn, RemovalPolicy, Stack, StackProps, Tags } from 'aws-cdk-lib';
+import { CfnOutput, Duration, RemovalPolicy, Stack, StackProps, Tags } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
-import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
-import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cwActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
@@ -17,8 +14,6 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as logs from 'aws-cdk-lib/aws-logs';
-import * as route53 from 'aws-cdk-lib/aws-route53';
-import * as r53targets from 'aws-cdk-lib/aws-route53-targets';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
@@ -32,9 +27,8 @@ import * as triggers from 'aws-cdk-lib/triggers';
 /**
  * SmartWaste on AWS. One stack, all serverless, nothing to patch.
  *
- *   Browser ──► CloudFront ──► S3 (static site)
- *                  │
- *                  └─ /api/* ──► API Gateway ──► Lambda api ──► DynamoDB
+ *   Browser ──► S3 (static site over HTTPS)
+ *      └──────► API Gateway ──► Lambda api ──► DynamoDB
  *                                                                   │  └──► Step Functions (Express) ──► planner Lambdas ──► DynamoDB
  *                                                                   └──► S3 presigned POST
  *   Photo ──► S3 uploads ──► SQS (+DLQ) ──► Lambda analyzer (Pillow, Rekognition, optional SageMaker) ──► DynamoDB
@@ -44,7 +38,7 @@ import * as triggers from 'aws-cdk-lib/triggers';
  * Optional context (cdk deploy -c key=value):
  *   alertEmail         subscribe this address to overflow and nightly-plan alerts
  *   sagemakerEndpoint  name of a SageMaker endpoint the analyzer should ask for fill levels first
- *   domainName + hostedZoneName   serve the site from your own Route 53 domain (needs us-east-1)
+ *   siteBucketName    existing public S3 site bucket (created by scripts/deploy-s3-only.sh)
  */
 export class SmartWasteStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
@@ -57,8 +51,7 @@ export class SmartWasteStack extends Stack {
     };
     const alertEmail = ctx('alertEmail');
     const sagemakerEndpoint = ctx('sagemakerEndpoint');
-    const domainName = ctx('domainName');
-    const hostedZoneName = ctx('hostedZoneName');
+    const siteBucketName = ctx('siteBucketName') || `smartwaste-site-${this.account}-${this.region}`;
 
     const backendDir = path.join(__dirname, '../../backend');
     const layerDir = path.join(backendDir, 'layer');
@@ -82,13 +75,7 @@ export class SmartWasteStack extends Stack {
       projectionType: dynamodb.ProjectionType.ALL,
     });
 
-    const siteBucket = new s3.Bucket(this, 'Site', {
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      enforceSSL: true,
-      removalPolicy: RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
-    });
+    const siteBucket = s3.Bucket.fromBucketName(this, 'Site', siteBucketName);
 
     const uploads = new s3.Bucket(this, 'Uploads', {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -234,6 +221,12 @@ export class SmartWasteStack extends Stack {
     const api = new apigwv2.HttpApi(this, 'HttpApi', {
       apiName: 'smartwaste-api',
       description: 'Public SmartWaste HTTP API.',
+      corsPreflight: {
+        allowOrigins: [`https://${siteBucket.bucketRegionalDomainName}`],
+        allowHeaders: ['content-type'],
+        allowMethods: [apigwv2.CorsHttpMethod.GET, apigwv2.CorsHttpMethod.POST, apigwv2.CorsHttpMethod.PUT],
+        maxAge: Duration.hours(1),
+      },
     });
     const apiIntegration = new HttpLambdaIntegration('ApiIntegration', apiFn);
     // Keep in step with ROUTES in backend/src/smartwaste/api.py
@@ -280,81 +273,16 @@ export class SmartWasteStack extends Stack {
 
     // ------------------------------------------------------------------ front door
     const siteDir = path.join(__dirname, '../../frontend');
-    const csp = [
-      "default-src 'self'",
-      "script-src 'self' https://cdn.jsdelivr.net",
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net",
-      "font-src https://fonts.gstatic.com",
-      "img-src 'self' data: blob:",
-      "worker-src 'self' blob:",
-      `connect-src 'self' https://cognito-identity.${this.region}.amazonaws.com https://sts.${this.region}.amazonaws.com https://maps.geo.${this.region}.amazonaws.com https://*.s3.amazonaws.com https://*.s3.${this.region}.amazonaws.com`,
-      "frame-ancestors 'none'",
-      "base-uri 'self'",
-      "form-action 'self'",
-    ].join('; ');
-    const headers = new cloudfront.ResponseHeadersPolicy(this, 'SecurityHeaders', {
-      securityHeadersBehavior: {
-        contentSecurityPolicy: { contentSecurityPolicy: csp, override: true },
-        contentTypeOptions: { override: true },
-        frameOptions: { frameOption: cloudfront.HeadersFrameOption.DENY, override: true },
-        referrerPolicy: { referrerPolicy: cloudfront.HeadersReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN, override: true },
-        strictTransportSecurity: { accessControlMaxAge: Duration.days(365), includeSubdomains: true, override: true },
-      },
-    });
-
-    let domainProps: { domainNames: string[]; certificate: acm.ICertificate } | undefined;
-    let zone: route53.IHostedZone | undefined;
-    if (domainName && hostedZoneName) {
-      if (this.region !== 'us-east-1') {
-        throw new Error('A custom domain needs the stack in us-east-1, because CloudFront certificates live there. Set CDK_DEFAULT_REGION=us-east-1.');
-      }
-      zone = route53.HostedZone.fromLookup(this, 'Zone', { domainName: hostedZoneName });
-      const cert = new acm.Certificate(this, 'Cert', { domainName, validation: acm.CertificateValidation.fromDns(zone) });
-      domainProps = { domainNames: [domainName], certificate: cert };
-    }
-
-    const apiHost = Fn.select(2, Fn.split('/', api.apiEndpoint));
-    const cdn = new cloudfront.Distribution(this, 'Cdn', {
-      comment: 'SmartWaste site and API',
-      defaultRootObject: 'index.html',
-      httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
-      minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
-      ...(domainProps ?? {}),
-      defaultBehavior: {
-        origin: origins.S3BucketOrigin.withOriginAccessControl(siteBucket),
-        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-        responseHeadersPolicy: headers,
-        compress: true,
-      },
-      additionalBehaviors: {
-        '/api/*': {
-          origin: new origins.HttpOrigin(apiHost, { protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY }),
-          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,
-          allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
-          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
-          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
-          responseHeadersPolicy: headers,
-        },
-      },
-    });
-    if (zone && domainName) {
-      const target = route53.RecordTarget.fromAlias(new r53targets.CloudFrontTarget(cdn));
-      new route53.ARecord(this, 'AliasA', { zone, recordName: domainName, target });
-      new route53.AaaaRecord(this, 'AliasAaaa', { zone, recordName: domainName, target });
-    }
-
     const siteConfig: Record<string, unknown> = {
       mode: 'cloud',
       region: this.region,
-      apiBase: '/api',
+      apiBase: `${api.apiEndpoint}/api`,
       schedule: 'every night at 22:00 IST',
       map: { identityPoolId: mapIdentityPool.ref, region: this.region, style: 'Standard' },
     };
     new s3deploy.BucketDeployment(this, 'DeploySite', {
       sources: [s3deploy.Source.asset(siteDir), s3deploy.Source.jsonData('config.json', siteConfig)],
       destinationBucket: siteBucket,
-      distribution: cdn,
-      distributionPaths: ['/*'],
       prune: true,
     });
 
@@ -421,9 +349,9 @@ export class SmartWasteStack extends Stack {
     alarm('PlannerFailedAlarm', planner.metricFailed({ period: Duration.minutes(5) }), 1, 'The collection planner failed.');
 
     // ------------------------------------------------------------------ outputs
-    const siteUrl = domainName ? `https://${domainName}` : `https://${cdn.distributionDomainName}`;
-    new CfnOutput(this, 'SiteUrl', { value: siteUrl, description: 'Open this to use SmartWaste' });
-    new CfnOutput(this, 'CloudFrontUrl', { value: `https://${cdn.distributionDomainName}` });
+    const siteUrl = `https://${siteBucket.bucketRegionalDomainName}/index.html`;
+    new CfnOutput(this, 'SiteUrl', { value: siteUrl, description: 'Open this to use SmartWaste over HTTPS directly from S3' });
+    new CfnOutput(this, 'ApiBase', { value: `${api.apiEndpoint}/api`, description: 'Public SmartWaste API base URL' });
     new CfnOutput(this, 'TableName', { value: table.tableName });
     new CfnOutput(this, 'UploadBucket', { value: uploads.bucketName });
     new CfnOutput(this, 'MapIdentityPoolId', { value: mapIdentityPool.ref });

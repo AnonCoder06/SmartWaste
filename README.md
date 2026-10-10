@@ -8,7 +8,7 @@ Predicts which bins will overflow by morning, then plans the shortest truck rout
 
 Residents photograph a bin. A cloud pipeline estimates how full it is, updates the forecast, and warns the crew if it will overflow. Every night a workflow ranks all bins by priority, fills the truck, orders the stops and puts the route on the collector's task list.
 
-Built for the WeMakeDevs x AWS hackathon, **Ship It** track. The AWS deployment is deferred while the MVP is developed and tested locally.
+Built for the WeMakeDevs x AWS hackathon, **Ship It** track. The site is hosted directly in S3 over HTTPS, and its backend is deployed to AWS in `ap-south-1` without CloudFront.
 
 ## Current interface
 
@@ -22,9 +22,8 @@ The sample bin locations are illustrative points in a Bengaluru demo neighborhoo
 
 ```mermaid
 flowchart LR
-  user([Browser]) --> cf[CloudFront]
-  cf -->|/| site[(S3 site)]
-  cf -->|/api/*| apigw[Public API Gateway]
+  user([Browser]) -->|HTTPS site| site[(Public S3 site bucket)]
+  user -->|HTTPS API| apigw[Public API Gateway]
   apigw --> api[Lambda: api]
   api --> ddb[(DynamoDB)]
   api -->|StartSyncExecution| sfn
@@ -50,12 +49,12 @@ flowchart LR
 | Ship It category | Services used | Where |
 |---|---|---|
 | Serverless | Lambda, API Gateway (HTTP API), Step Functions (Express) | `api`, analyzer and planner Lambdas; nightly planner workflow |
-| Data and search | DynamoDB, S3 | single table with one GSI; site bucket and photo bucket |
+| Data and search | DynamoDB, S3 | single table with one GSI; public static site bucket and private photo bucket |
 | Access | Public API | no account or login required; both consoles and API routes are open |
-| The plumbing | CloudFront, EventBridge, SQS, SNS, CloudWatch, Route 53 (optional), Amazon Location Maps | one front door for site and API; schedule and event bus; photo queue with dead-letter queue; alerts; dashboard and 4 alarms; real basemap with bin and route overlays |
+| The plumbing | API Gateway, EventBridge, SQS, SNS, CloudWatch, Amazon Location Maps | direct S3 HTTPS site and API endpoints; schedule and event bus; photo queue with dead-letter queue; alerts; dashboard and 4 alarms; real basemap with bin and route overlays |
 | Agents and AI | Rekognition today, SageMaker endpoint optional | Rekognition turns away photos that are not a bin. If `SAGEMAKER_ENDPOINT` is set, the analyzer asks it for the fill level first and falls back to the built-in estimator |
 
-No servers, no VPC, no NAT. Map tiles are billed by Amazon Location usage; the browser role is limited to read-only map rendering.
+No servers, no VPC, no NAT, and no CloudFront. The site bucket serves public static files directly over HTTPS. Map tiles are billed by Amazon Location usage; the browser role is limited to read-only map rendering.
 
 ### How the three main flows work
 
@@ -65,9 +64,9 @@ No servers, no VPC, no NAT. Map tiles are billed by Amazon Location usage; the b
 
 **Access.** The MVP has no login or role checks. Anyone who can reach the site can report bins, upload photos, change shared planner settings, run collections and reset the shared demo data.
 
-## Deploy after the MVP
+## Deploy
 
-AWS deployment is intentionally postponed until the MVP is ready. Local development and demos do not require AWS credentials. When deployment is approved, the CDK scripts below deploy the static frontend, API and supporting services.
+Local development and demos do not require AWS credentials. `scripts/deploy.sh` deploys the backend and publishes the cloud-connected frontend to the existing S3 site bucket. It does not create a CloudFront distribution.
 
 Run deployment from your own computer with the AWS CLI configured for the account and region you intend to use. Node 20+ and Python 3.9+ are also required. On Windows, use WSL or Git Bash.
 
@@ -77,19 +76,19 @@ export ALERT_EMAIL=you@example.com            # optional: overflow and nightly-p
 scripts/deploy.sh
 ```
 
-The script runs the backend tests, builds the Pillow layer for Lambda, bootstraps CDK, deploys, prints the **live URL**, and runs the smoke test without requiring a SmartWaste login. AWS CLI credentials are still required. Expect 8 to 12 minutes the first time, mostly CloudFront.
+The script builds the Pillow layer for Lambda, bootstraps CDK, deploys the stack, prints the **live URL**, and runs the smoke test. AWS CLI credentials are required; SmartWaste itself has no login. The S3 site URL opens `index.html` over HTTPS, and the frontend calls API Gateway directly.
 
 After deploying:
 
 | Task | How |
 |---|---|
-| Check the live site | `python3 scripts/smoke.py <url> --reset` |
+| Check the live site and backend | `python3 scripts/smoke.py <site-url> --api-base <api-base> --reset` (use the `SiteUrl` and `ApiBase` stack outputs) |
 | Watch it | The `DashboardUrl` output opens the CloudWatch dashboard |
 | Get email alerts | Confirm the SNS subscription email AWS sends to `ALERT_EMAIL` |
-| Custom domain | `DOMAIN_NAME=waste.example.com HOSTED_ZONE_NAME=example.com scripts/deploy.sh` (needs a Route 53 zone, forces us-east-1) |
-| Pick a region | `AWS_REGION=ap-south-1 scripts/deploy.sh`. Defaults to your CLI region, else us-east-1. A custom domain forces us-east-1 |
-| Quick S3-only demo | `scripts/deploy-s3-only.sh` hosts just the front end on S3 website hosting (HTTP, offline demo, no sign-in). `--destroy` removes it |
-| Remove everything | `scripts/destroy.sh` |
+| Pick a region | `AWS_REGION=ap-south-1 scripts/deploy.sh`. Defaults to your CLI region, else us-east-1 |
+| S3-only offline demo | `scripts/deploy-s3-only.sh` publishes the browser-only demo to the S3 website endpoint over HTTP |
+| Remove backend stack | `scripts/destroy.sh` |
+| Remove the S3 site bucket | `scripts/deploy-s3-only.sh --destroy` |
 
 ## Run it locally with no AWS
 
@@ -122,11 +121,11 @@ The Python model and planner are a port of `frontend/engine.js`. `test_parity.py
 - **Fill estimate.** The built-in estimator measures edge density on a 64x64 grey thumbnail. It separates empty, half and overflowing bins in clean photos and is a baseline, not a trained model. Rekognition screens out non-bin photos. The SageMaker hook is wired and tested against a stub, but no model is deployed, because there are no labelled bin photos to train on. Correcting a wrong detection is one tap, and corrections replace the original report instead of stacking.
 - **Forecast.** Predicted fill is current fill plus fill rate times hours to collection. Fill does not yet grow by itself between reports.
 - **Data and map.** One demo neighbourhood of 24 bins. The browser places illustrative points over a sample area in Bengaluru on an Amazon Location basemap. Bin place names appear on marker hover or keyboard focus. The map shows the real street basemap, but the sample bin positions are not surveyed addresses. Routes use Manhattan distance on the demo grid, not road-network directions; displayed route lines connect stops directly.
-- **Not run in the authoring sandbox.** The CDK stack was written without access to npm or PyPI, so `cdk synth` and a real deploy have not been run. The stack file parses and its API routes match the backend route table exactly. The backend runs against faithful in-memory stand-ins, which check logic and DynamoDB expression shapes but not AWS itself. `scripts/smoke.py` is the check against the real thing: run it right after the first deploy. If `cdk deploy` reports a type error, it will point at a line in `infra/lib/smartwaste-stack.ts`.
+- **AWS integration.** The stack is deployed in `ap-south-1`. The deployment smoke check passed the API, S3 upload and analyzer path, reporting, planner, stop tracking, and reset flows. Its synthetic photo was correctly rejected as not showing a bin; a successful analysis of a real bin photo still needs to be checked in the live UI.
 
 ## Security notes
 
-Photo bucket and site bucket block all public access and enforce TLS. CloudFront reaches the site bucket with origin access control. The photo bucket accepts only presigned POSTs, with a fixed key, content type and size. Uploaded photos expire after 30 days. CloudFront adds a strict Content-Security-Policy, HSTS, frame denial and nosniff. API Gateway throttles at 50 requests per second. Lambda error messages never include internals. Pending uploads expire from DynamoDB after a day. The application API is intentionally public for this MVP; do not store sensitive data or deploy it for private operational use without adding access controls.
+The photo bucket blocks public access and accepts only presigned POSTs with a fixed key, content type, and size; uploaded photos expire after 30 days. The site bucket is publicly readable so browsers can load the static app directly over HTTPS from S3. API Gateway throttles at 50 requests per second. The API intentionally has no login: anyone who can reach the site can submit reports, change shared planner settings, run collections, and reset demo data. Do not store sensitive data or use this for private operations without adding access controls.
 
 ## Layout
 

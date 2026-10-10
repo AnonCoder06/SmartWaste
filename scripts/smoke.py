@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Smoke test for a running SmartWaste (deployed on AWS, or dev/server.py). Standard library only.
 
-    python3 scripts/smoke.py https://dxxxx.cloudfront.net
+    python3 scripts/smoke.py https://site-bucket.s3.region.amazonaws.com/index.html --api-base https://api-id.execute-api.region.amazonaws.com/api
     python3 scripts/smoke.py http://localhost:8787
 
 Exercises the public API, reports, the S3 -> SQS -> analyzer photo path, the Step Functions planner,
@@ -64,21 +64,25 @@ def multipart(fields, filename, content, ctype):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("base")
+    ap.add_argument("base", help="site root or direct S3 index.html URL")
+    ap.add_argument("--api-base", help="API base URL including /api; defaults to the site's /api path")
     ap.add_argument("--reset", action="store_true", help="restore the seed data at the end")
     a = ap.parse_args()
     base = a.base.rstrip("/")
-    st, conf = http("GET", base + "/config.json")
+    site_root = base.rsplit("/", 1)[0] if base.endswith("/index.html") else base
+    site_home = base if base.endswith("/index.html") else base + "/"
+    api_base = (a.api_base or site_root + "/api").rstrip("/")
+    st, conf = http("GET", site_root + "/config.json")
     check("site serves config.json in cloud mode", st == 200 and conf.get("mode") == "cloud", str(conf)[:120])
-    st, home = http("GET", base + "/", raw=True)
+    st, home = http("GET", site_home, raw=True)
     check("site serves the page", st == 200 and b"SmartWaste" in home)
     if fails:
         sys.exit(1)
 
     def api(m, p, body=None):
-        return http(m, base + "/api" + p, body, {"Content-Type": "application/json"})
+        return http(m, api_base + p, body, {"Content-Type": "application/json"})
 
-    st, _ = http("GET", base + "/api/state")
+    st, _ = http("GET", api_base + "/state")
     check("API works without signing in", st == 200, str(st))
     st, s0 = api("GET", "/state")
     check("state returns 24 bins", st == 200 and len(s0.get("bins", [])) == 24, str(s0)[:120])
