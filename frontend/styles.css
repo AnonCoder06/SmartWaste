@@ -199,6 +199,10 @@ button{font:inherit;color:inherit}
 .geo-depot,.geo-truck{display:grid;place-items:center;width:28px;height:28px;border:2px solid var(--panel);border-radius:7px;background:var(--ink);color:var(--bg);box-shadow:0 1px 5px #0005;font:700 12px var(--font-mono)}
 .geo-truck{background:var(--route);color:var(--route-ink);border-radius:50%;font-size:15px}
 .geo-map .maplibregl-ctrl-group{border-radius:8px;overflow:hidden}
+.geo-hover-popup .maplibregl-popup-content{padding:0;border:1.5px solid var(--edge);border-radius:9px;background:var(--panel);color:var(--ink);box-shadow:3px 3px 0 var(--shadow)}
+.geo-hover-popup .maplibregl-popup-tip{border-top-color:var(--panel);border-bottom-color:var(--panel)}
+.geo-hover-card{display:grid;gap:4px;padding:9px 11px;font:12px/1.35 var(--font-body)}
+.geo-hover-card b{font-weight:700}.geo-hover-card span{color:var(--muted);font-size:11px}
 .mapsvg .st{font:500 10px var(--font-mono);fill:var(--muted);letter-spacing:.12em}
 .bin{cursor:pointer;outline:none}
 .bin .ring{fill:var(--panel);stroke-width:5}

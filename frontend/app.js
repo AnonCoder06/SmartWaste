@@ -16,7 +16,7 @@ var cfg = JSON.parse(JSON.stringify(E.DEFAULT_CONFIG));
 var bins = [], plan = null, D = [], sel = null, lr = 'cur', lc = 'prio';
 var lastResult = null, busyMsg = '', log = [], anim, simClock = 'Mon 22:00', saveT, tuneBusy = false, planBusy = false, loaded = false;
 var samples = null;
-var geoMaps = {}, geoMarkers = { r: [], c: [] }, geoReady = { r: false, c: false };
+var geoMaps = {}, geoReady = { r: false, c: false };
 
 function binById(id) { return bins.filter(function (b) { return b.id === id; })[0]; }
 function row(id) { return D.filter(function (r) { return r.b.id === id; })[0]; }
@@ -86,39 +86,94 @@ function geoName(b) {
   return spec ? spec[1] : b.name;
 }
 function cssColor(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
-function geoMarkerHTML(r, layer, withRoute) {
-  var b = r.b, cls = layer === 'cur' ? E.fillCls(b.cur) : layer === 'pred' ? E.fillCls(r.pred) : r.tier;
-  var val = layer === 'cur' ? Math.round(b.cur) : layer === 'pred' ? Math.round(r.pred) : Math.round(r.score * 100);
-  var idx = withRoute && plan ? plan.route.indexOf(b.id) : -1;
-  var place = geoName(b);
-  var tip = b.id + ' ' + place + ' · ' + Math.round(b.cur) + '% now · ' + Math.round(r.pred) + '% by morning · priority ' + Math.round(r.score * 100);
-  var el = document.createElement('button');
-  el.type = 'button'; el.className = 'geo-bin' + (withRoute && plan && idx < 0 ? ' dim' : '') + (sel === b.id ? ' sel' : '');
-  el.setAttribute('data-id', b.id); el.setAttribute('data-place', place); el.setAttribute('aria-label', tip);
-  el.style.setProperty('--pin', cssColor('--c-' + cls));
-  el.innerHTML = '<span class="geo-bin-ring">' + val + '</span><span class="geo-bin-label">' + esc(b.id) + '</span>'
-    + (idx >= 0 ? '<span class="geo-stop' + (ticked()[b.id] ? ' done' : '') + '" data-stop="' + idx + '">' + (idx + 1) + '</span>' : '');
-  el.addEventListener('click', function (e) { e.stopPropagation(); select(b.id); });
-  return el;
+function geoLayerId(side, suffix) { return side + '-bins-' + suffix; }
+function removeGeoLayer(map, id) { if (map.getLayer(id)) map.removeLayer(id); }
+function geoBinFeatures(layer, withRoute) {
+  return D.map(function (r) {
+    var b = r.b, cls = layer === 'cur' ? E.fillCls(b.cur) : layer === 'pred' ? E.fillCls(r.pred) : r.tier;
+    var value = layer === 'cur' ? Math.round(b.cur) : layer === 'pred' ? Math.round(r.pred) : Math.round(r.score * 100);
+    var stop = withRoute && plan ? plan.route.indexOf(b.id) : -1;
+    return {
+      type: 'Feature', geometry: { type: 'Point', coordinates: geoPoint(b) },
+      properties: {
+        id: b.id, place: geoName(b), value: String(value), pin: cssColor('--c-' + cls),
+        subLabel: stop >= 0 ? String(stop + 1) : b.id,
+        dim: withRoute && plan && stop < 0 ? 1 : 0,
+        selected: sel === b.id ? 1 : 0,
+        done: stop >= 0 && ticked()[b.id] ? 1 : 0,
+        now: Math.round(b.cur), predicted: Math.round(r.pred), priority: Math.round(r.score * 100),
+      },
+    };
+  });
+}
+function wireGeoMap(map, side) {
+  if (map.__smartWasteBinEvents) return;
+  map.__smartWasteBinEvents = true;
+  var circleId = geoLayerId(side, 'circle'), labelId = geoLayerId(side, 'label');
+  var popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 14, className: 'geo-hover-popup' });
+  map.on('click', function (e) {
+    if (!map.getLayer(circleId)) return;
+    var features = map.queryRenderedFeatures(e.point, { layers: [circleId] });
+    if (features.length) select(features[0].properties.id);
+  });
+  map.on('mousemove', function (e) {
+    if (!map.getLayer(circleId)) return;
+    var features = map.queryRenderedFeatures(e.point, { layers: [circleId, labelId] });
+    if (!features.length) { popup.remove(); map.getCanvas().style.cursor = ''; return; }
+    var f = features[0], p = f.properties;
+    map.getCanvas().style.cursor = 'pointer';
+    popup.setLngLat(f.geometry.coordinates).setHTML('<div class="geo-hover-card"><b>' + esc(p.place) + '</b><span>' + esc(p.id) + ' · ' + p.now + '% now · ' + p.predicted + '% by morning · priority ' + p.priority + '</span></div>').addTo(map);
+  });
+  map.on('mouseout', function () { popup.remove(); map.getCanvas().style.cursor = ''; });
 }
 function renderGeoMap(side, layer, withRoute) {
-  var map = geoMaps[side], el = $(side === 'r' ? '#rMap' : '#cMap');
+  var map = geoMaps[side];
   if (!map || !geoReady[side] || !map.loaded()) return false;
-  geoMarkers[side].forEach(function (m) { m.remove(); }); geoMarkers[side] = [];
   var srcId = side + '-route';
   if (map.getLayer(srcId + '-line')) map.removeLayer(srcId + '-line');
   if (map.getSource(srcId)) map.removeSource(srcId);
+  var binsId = geoLayerId(side, 'data');
+  removeGeoLayer(map, geoLayerId(side, 'label'));
+  removeGeoLayer(map, geoLayerId(side, 'value'));
+  removeGeoLayer(map, geoLayerId(side, 'circle'));
+  if (map.getSource(binsId)) map.removeSource(binsId);
+  var depotSourceId = side + '-depot-data';
+  removeGeoLayer(map, side + '-depot-label'); removeGeoLayer(map, side + '-depot-circle');
+  if (map.getSource(depotSourceId)) map.removeSource(depotSourceId);
   if (withRoute && plan && plan.route.length) {
     var pts = [geoPoint(DEPOT)].concat(plan.route.map(function (id) { return binById(id); }).filter(Boolean).map(geoPoint), [geoPoint(DEPOT)]);
     map.addSource(srcId, { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: pts } } });
     map.addLayer({ id: srcId + '-line', type: 'line', source: srcId, layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': cssColor('--route'), 'line-width': 5, 'line-opacity': 0.9 } });
   }
-  var depotEl = document.createElement('div'); depotEl.className = 'geo-depot'; depotEl.textContent = 'D'; depotEl.title = 'Collection depot';
-  geoMarkers[side].push(new maplibregl.Marker({ element: depotEl, anchor: 'center' }).setLngLat(geoPoint(DEPOT)).addTo(map));
-  D.forEach(function (r) {
-    geoMarkers[side].push(new maplibregl.Marker({ element: geoMarkerHTML(r, layer, withRoute), anchor: 'center' }).setLngLat(geoPoint(r.b)).addTo(map));
+  map.addSource(binsId, { type: 'geojson', data: { type: 'FeatureCollection', features: geoBinFeatures(layer, withRoute) } });
+  map.addLayer({
+    id: geoLayerId(side, 'circle'), type: 'circle', source: binsId,
+    paint: {
+      'circle-radius': ['case', ['==', ['get', 'selected'], 1], 18, 15],
+      'circle-color': cssColor('--panel'), 'circle-stroke-color': ['get', 'pin'],
+      'circle-stroke-width': ['case', ['==', ['get', 'selected'], 1], 4, 3],
+      'circle-opacity': ['case', ['==', ['get', 'dim'], 1], 0.42, 1],
+      'circle-stroke-opacity': ['case', ['==', ['get', 'dim'], 1], 0.42, 1],
+    },
   });
-  requestAnimationFrame(function () { map.resize(); });
+  map.addLayer({
+    id: geoLayerId(side, 'value'), type: 'symbol', source: binsId,
+    layout: { 'text-field': ['get', 'value'], 'text-font': ['Amazon Ember Regular'], 'text-size': 10, 'text-allow-overlap': true, 'text-ignore-placement': true },
+    paint: { 'text-color': cssColor('--ink'), 'text-opacity': ['case', ['==', ['get', 'dim'], 1], 0.42, 1] },
+  });
+  map.addLayer({
+    id: geoLayerId(side, 'label'), type: 'symbol', source: binsId,
+    layout: { 'text-field': ['get', 'subLabel'], 'text-font': ['Amazon Ember Regular'], 'text-size': 10, 'text-offset': [0, 1.65], 'text-allow-overlap': true, 'text-ignore-placement': true },
+    paint: {
+      'text-color': ['case', ['==', ['get', 'done'], 1], cssColor('--c-low'), cssColor('--ink')],
+      'text-halo-color': cssColor('--panel'), 'text-halo-width': 1.5,
+      'text-opacity': ['case', ['==', ['get', 'dim'], 1], 0.42, 1],
+    },
+  });
+  map.addSource(depotSourceId, { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: geoPoint(DEPOT) } } });
+  map.addLayer({ id: side + '-depot-circle', type: 'circle', source: depotSourceId, paint: { 'circle-radius': 13, 'circle-color': cssColor('--ink'), 'circle-stroke-color': cssColor('--panel'), 'circle-stroke-width': 2 } });
+  map.addLayer({ id: side + '-depot-label', type: 'symbol', source: depotSourceId, layout: { 'text-field': 'D', 'text-font': ['Amazon Ember Regular'], 'text-size': 12 }, paint: { 'text-color': cssColor('--bg') } });
+  wireGeoMap(map, side);
   return true;
 }
 function initGeoMaps(mapConfig) {
