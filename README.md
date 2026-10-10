@@ -20,6 +20,7 @@ flowchart LR
   api -->|StartSyncExecution| sfn
   api -->|presigned POST| up[(S3 uploads)]
   user -->|photo| up
+  user -.temporary guest credentials.-> geo[Amazon Location Maps]
   up -->|ObjectCreated| sqs[SQS + DLQ]
   sqs --> an[Lambda: analyzer<br/>Pillow + Rekognition<br/>optional SageMaker]
   an --> ddb
@@ -41,10 +42,10 @@ flowchart LR
 | Serverless | Lambda, API Gateway (HTTP API), Step Functions (Express) | `api`, analyzer and planner Lambdas; nightly planner workflow |
 | Data and search | DynamoDB, S3 | single table with one GSI; site bucket and photo bucket |
 | Auth and policy | Cognito | self sign-up, email confirmation, `collectors` group, JWT authorizer on every route |
-| The plumbing | CloudFront, EventBridge, SQS, SNS, CloudWatch, Route 53 (optional) | one front door for site and API; schedule and event bus; photo queue with dead-letter queue; alerts; dashboard and 4 alarms |
+| The plumbing | CloudFront, EventBridge, SQS, SNS, CloudWatch, Route 53 (optional), Amazon Location Maps | one front door for site and API; schedule and event bus; photo queue with dead-letter queue; alerts; dashboard and 4 alarms; real basemap with bin and route overlays |
 | Agents and AI | Rekognition today, SageMaker endpoint optional | Rekognition turns away photos that are not a bin. If `SAGEMAKER_ENDPOINT` is set, the analyzer asks it for the fill level first and falls back to the built-in estimator |
 
-No servers, no VPC, no NAT. At rest it costs close to nothing.
+No servers, no VPC, no NAT. Map tiles are billed by Amazon Location usage; the browser role is limited to read-only map rendering.
 
 ### How the three main flows work
 
@@ -107,7 +108,7 @@ The Python model and planner are a port of `frontend/engine.js`. `test_parity.py
 
 - **Fill estimate.** The built-in estimator measures edge density on a 64x64 grey thumbnail. It separates empty, half and overflowing bins in clean photos and is a baseline, not a trained model. Rekognition screens out non-bin photos. The SageMaker hook is wired and tested against a stub, but no model is deployed, because there are no labelled bin photos to train on. Correcting a wrong detection is one tap, and corrections replace the original report instead of stacking.
 - **Forecast.** Predicted fill is current fill plus fill rate times hours to collection. Fill does not yet grow by itself between reports.
-- **Data.** One demo neighbourhood of 24 bins on a street grid. Routes use Manhattan distance on that grid, not a road network.
+- **Data and map.** One demo neighbourhood of 24 bins. The browser places illustrative points over a sample area in Bengaluru on an Amazon Location basemap. The map shows the real street basemap, but the sample bin positions are not surveyed addresses. Routes use Manhattan distance on the demo grid, not road-network directions; displayed route lines connect stops directly.
 - **Not run in the authoring sandbox.** The CDK stack was written without access to npm or PyPI, so `cdk synth` and a real deploy have not been run. The stack file parses and its API routes match the backend route table exactly. The backend runs against faithful in-memory stand-ins, which check logic and DynamoDB expression shapes but not AWS itself. `scripts/smoke.py` is the check against the real thing: run it right after the first deploy. If `cdk deploy` reports a type error, it will point at a line in `infra/lib/smartwaste-stack.ts`.
 - **Sign-up email.** Cognito's built-in sender allows about 50 emails a day. Fine for a demo. For more, point the user pool at SES.
 

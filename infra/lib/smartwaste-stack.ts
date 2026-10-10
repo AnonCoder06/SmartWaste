@@ -129,6 +129,27 @@ export class SmartWasteStack extends Stack {
       description: 'Collection crews. Can run the planner and tick off stops.',
     });
 
+    // The browser uses short-lived guest credentials for Amazon Location's
+    // basemap APIs. Keep the role limited to rendering the default map style.
+    const mapIdentityPool = new cognito.CfnIdentityPool(this, 'MapIdentityPool', {
+      identityPoolName: 'smartwaste-map',
+      allowUnauthenticatedIdentities: true,
+    });
+    const mapGuestRole = new iam.Role(this, 'MapGuestRole', {
+      assumedBy: new iam.FederatedPrincipal('cognito-identity.amazonaws.com', {
+        'StringEquals': { 'cognito-identity.amazonaws.com:aud': mapIdentityPool.ref },
+        'ForAnyValue:StringLike': { 'cognito-identity.amazonaws.com:amr': 'unauthenticated' },
+      }, 'sts:AssumeRoleWithWebIdentity'),
+    });
+    mapGuestRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['geo-maps:GetTile', 'geo-maps:GetStyleDescriptor', 'geo-maps:GetSprites', 'geo-maps:GetGlyphs'],
+      resources: [`arn:${this.partition}:geo-maps:${this.region}::provider/default`],
+    }));
+    new cognito.CfnIdentityPoolRoleAttachment(this, 'MapIdentityPoolRoles', {
+      identityPoolId: mapIdentityPool.ref,
+      roles: { unauthenticated: mapGuestRole.roleArn },
+    });
+
     // ------------------------------------------------------------------ messaging
     const alerts = new sns.Topic(this, 'Alerts', { displayName: 'SmartWaste alerts' });
     if (alertEmail) alerts.addSubscription(new subs.EmailSubscription(alertEmail));
@@ -290,11 +311,12 @@ export class SmartWasteStack extends Stack {
     const siteDir = path.join(__dirname, '../../frontend');
     const csp = [
       "default-src 'self'",
-      "script-src 'self'",
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "script-src 'self' https://cdn.jsdelivr.net",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net",
       "font-src https://fonts.gstatic.com",
       "img-src 'self' data: blob:",
-      `connect-src 'self' https://cognito-idp.${this.region}.amazonaws.com https://*.s3.amazonaws.com https://*.s3.${this.region}.amazonaws.com`,
+      "worker-src 'self' blob:",
+      `connect-src 'self' https://cognito-idp.${this.region}.amazonaws.com https://cognito-identity.${this.region}.amazonaws.com https://sts.${this.region}.amazonaws.com https://maps.geo.${this.region}.amazonaws.com https://*.s3.amazonaws.com https://*.s3.${this.region}.amazonaws.com`,
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
@@ -356,6 +378,7 @@ export class SmartWasteStack extends Stack {
       userPoolClientId: client.userPoolClientId,
       apiBase: '/api',
       schedule: 'every night at 22:00 IST',
+      map: { identityPoolId: mapIdentityPool.ref, region: this.region, style: 'Standard' },
     };
     if (demoPassword) {
       siteConfig.demo = {
@@ -448,6 +471,7 @@ export class SmartWasteStack extends Stack {
     new CfnOutput(this, 'UserPoolClientId', { value: client.userPoolClientId });
     new CfnOutput(this, 'TableName', { value: table.tableName });
     new CfnOutput(this, 'UploadBucket', { value: uploads.bucketName });
+    new CfnOutput(this, 'MapIdentityPoolId', { value: mapIdentityPool.ref });
     new CfnOutput(this, 'PlannerArn', { value: planner.stateMachineArn });
     new CfnOutput(this, 'DashboardUrl', {
       value: `https://${this.region}.console.aws.amazon.com/cloudwatch/home?region=${this.region}#dashboards:name=${dashboard.dashboardName}`,

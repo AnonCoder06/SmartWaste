@@ -154,11 +154,25 @@ button{font:inherit;color:inherit}
 .layerpick .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600}
 .caption{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px 18px;padding:10px 14px;border-block:1px solid var(--line);background:var(--panel2)}
 .caption p{font-size:13px;min-width:0;flex:1 1 260px}
+.caption p small{display:inline-block;margin-top:3px;color:var(--muted);font-size:11px}
 .legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted)}
 .legend span{display:inline-flex;align-items:center;gap:6px}
 .legend i{width:11px;height:11px;border-radius:50%;background:var(--lc);display:inline-block}
 .mapwrap{overflow-x:auto;background:var(--map);border-radius:0 0 14px 14px}
 .mapsvg{display:block;width:100%;min-width:600px;height:auto}
+.geo-map{height:430px;min-width:0;overflow:hidden;background:var(--map)}
+.geo-map .maplibregl-canvas{outline:none}
+.geo-bin{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;padding:0;border:0;background:transparent;cursor:pointer;color:var(--ink);font:500 10px var(--font-mono);white-space:nowrap}
+.geo-bin-ring{display:grid;place-items:center;width:32px;height:32px;border:3px solid var(--pin);border-radius:50%;background:var(--panel);color:var(--ink);font:600 11px var(--font-mono);box-shadow:0 1px 5px #0005}
+.geo-bin.sel .geo-bin-ring{outline:3px solid var(--a);outline-offset:2px}
+.geo-bin.dim{opacity:.4}.geo-bin.dim.sel,.geo-bin.dim:hover{opacity:1}
+.geo-bin:hover .geo-bin-ring{transform:scale(1.08)}
+.geo-bin-label{padding:1px 3px;border-radius:3px;background:var(--panel);box-shadow:0 1px 3px #0003}
+.geo-stop{position:absolute;top:-5px;right:-12px;display:grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--route);color:var(--route-ink);border:1px solid var(--panel);font:600 10px var(--font-mono)}
+.geo-stop.done{background:var(--c-low)}
+.geo-depot,.geo-truck{display:grid;place-items:center;width:28px;height:28px;border:2px solid var(--panel);border-radius:7px;background:var(--ink);color:var(--bg);box-shadow:0 1px 5px #0005;font:700 12px var(--font-mono)}
+.geo-truck{background:var(--route);color:var(--route-ink);border-radius:50%;font-size:15px}
+.geo-map .maplibregl-ctrl-group{border-radius:8px;overflow:hidden}
 .mapsvg .st{font:500 10px var(--font-mono);fill:var(--muted);letter-spacing:.12em}
 .bin{cursor:pointer;outline:none}
 .bin .ring{fill:var(--panel);stroke-width:5}

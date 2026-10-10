@@ -16,6 +16,7 @@ var cfg = JSON.parse(JSON.stringify(E.DEFAULT_CONFIG));
 var bins = [], plan = null, D = [], sel = null, lr = 'cur', lc = 'prio';
 var lastResult = null, busyMsg = '', log = [], anim, simClock = 'Mon 22:00', saveT, tuneBusy = false, planBusy = false, loaded = false;
 var samples = null;
+var geoMaps = {}, geoMarkers = { r: [], c: [] }, geoReady = { r: false, c: false };
 
 function binById(id) { return bins.filter(function (b) { return b.id === id; })[0]; }
 function row(id) { return D.filter(function (r) { return r.b.id === id; })[0]; }
@@ -75,6 +76,70 @@ var BASE = (function () {
   return s;
 })();
 function colorOf(k) { return 'var(--c-' + k + ')'; }
+function geoPoint(b) {
+  // The sample grid is placed over a small demo area in Bengaluru. These are
+  // illustrative locations, not surveyed collection addresses.
+  return [77.5946 + (b.x / GRID - 6.5) * 0.00135, 12.9716 + (3.5 - b.y / GRID) * 0.00135];
+}
+function cssColor(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function geoMarkerHTML(r, layer, withRoute) {
+  var b = r.b, cls = layer === 'cur' ? E.fillCls(b.cur) : layer === 'pred' ? E.fillCls(r.pred) : r.tier;
+  var val = layer === 'cur' ? Math.round(b.cur) : layer === 'pred' ? Math.round(r.pred) : Math.round(r.score * 100);
+  var idx = withRoute && plan ? plan.route.indexOf(b.id) : -1;
+  var tip = b.id + ' ' + b.name + ' · ' + Math.round(b.cur) + '% now · ' + Math.round(r.pred) + '% by morning · priority ' + Math.round(r.score * 100);
+  var el = document.createElement('button');
+  el.type = 'button'; el.className = 'geo-bin' + (withRoute && plan && idx < 0 ? ' dim' : '') + (sel === b.id ? ' sel' : '');
+  el.setAttribute('data-id', b.id); el.setAttribute('aria-label', tip); el.title = tip;
+  el.style.setProperty('--pin', cssColor('--c-' + cls));
+  el.innerHTML = '<span class="geo-bin-ring">' + val + '</span><span class="geo-bin-label">' + esc(b.id) + '</span>'
+    + (idx >= 0 ? '<span class="geo-stop' + (ticked()[b.id] ? ' done' : '') + '" data-stop="' + idx + '">' + (idx + 1) + '</span>' : '');
+  el.addEventListener('click', function (e) { e.stopPropagation(); select(b.id); });
+  return el;
+}
+function renderGeoMap(side, layer, withRoute) {
+  var map = geoMaps[side], el = $(side === 'r' ? '#rMap' : '#cMap');
+  if (!map || !geoReady[side] || !map.loaded()) return false;
+  geoMarkers[side].forEach(function (m) { m.remove(); }); geoMarkers[side] = [];
+  var srcId = side + '-route';
+  if (map.getLayer(srcId + '-line')) map.removeLayer(srcId + '-line');
+  if (map.getSource(srcId)) map.removeSource(srcId);
+  if (withRoute && plan && plan.route.length) {
+    var pts = [geoPoint(DEPOT)].concat(plan.route.map(function (id) { return binById(id); }).filter(Boolean).map(geoPoint), [geoPoint(DEPOT)]);
+    map.addSource(srcId, { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: pts } } });
+    map.addLayer({ id: srcId + '-line', type: 'line', source: srcId, layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': cssColor('--route'), 'line-width': 5, 'line-opacity': 0.9 } });
+  }
+  var depotEl = document.createElement('div'); depotEl.className = 'geo-depot'; depotEl.textContent = 'D'; depotEl.title = 'Collection depot';
+  geoMarkers[side].push(new maplibregl.Marker({ element: depotEl, anchor: 'center' }).setLngLat(geoPoint(DEPOT)).addTo(map));
+  D.forEach(function (r) {
+    geoMarkers[side].push(new maplibregl.Marker({ element: geoMarkerHTML(r, layer, withRoute), anchor: 'bottom' }).setLngLat(geoPoint(r.b)).addTo(map));
+  });
+  requestAnimationFrame(function () { map.resize(); });
+  return true;
+}
+function initGeoMaps(mapConfig) {
+  if (!mapConfig || !window.maplibregl || !window.amazonLocationAuthHelper) return;
+  amazonLocationAuthHelper.withIdentityPoolId(mapConfig.identityPoolId).then(function (auth) {
+    ['r', 'c'].forEach(function (side) {
+      $(side === 'r' ? '#rMap' : '#cMap').innerHTML = '';
+      var map = new maplibregl.Map({
+        container: side === 'r' ? 'rMap' : 'cMap',
+        center: [77.5946, 12.9716], zoom: 14.4,
+        style: 'https://maps.geo.' + mapConfig.region + '.amazonaws.com/v2/styles/' + mapConfig.style + '/descriptor',
+        attributionControl: true,
+        transformRequest: auth.getMapAuthenticationOptions().transformRequest,
+      });
+      geoMaps[side] = map;
+      map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+      map.once('load', function () { geoReady[side] = true; renderMaps(); });
+      map.once('error', function (e) {
+        if (!geoReady[side] && e && e.error) {
+          console.warn('Amazon Location map failed to load; showing the local map view instead.', e.error.message);
+          map.remove(); geoMaps[side] = null; renderMaps();
+        }
+      });
+    });
+  }).catch(function (e) { console.warn('Amazon Location authentication failed', e); });
+}
 function binSVG(r, layer, withRoute) {
   var b = r.b, cls, txt;
   if (layer === 'cur') { cls = E.fillCls(b.cur); txt = Math.round(b.cur); }
@@ -113,12 +178,14 @@ function capText(layer) {
 }
 function setSeg(id, val) { all('button', $(id)).forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-l') === val ? 'true' : 'false'); }); }
 function renderMaps() {
-  $('#rMap').innerHTML = BASE + D.map(function (r) { return binSVG(r, lr, false); }).join('');
-  setSeg('#rLayers', lr); $('#rLegend').innerHTML = legendHTML(lr); $('#rCap').innerHTML = capText(lr);
+  if (!geoMaps.r) $('#rMap').innerHTML = '<svg class="mapsvg" viewBox="40 40 960 570" role="group" aria-label="Map of waste bins">' + BASE + D.map(function (r) { return binSVG(r, lr, false); }).join('') + '</svg>';
+  else renderGeoMap('r', lr, false);
+  setSeg('#rLayers', lr); $('#rLegend').innerHTML = legendHTML(lr); $('#rCap').innerHTML = capText(lr) + '<br><small>Bin positions are illustrative points in a sample Bengaluru neighborhood.</small>';
   var depot = '<g class="depot" transform="translate(80 560)"><rect x="-13" y="-13" width="26" height="26" rx="5"/><text y="4">D</text><text class="lbl" x="-13" y="28" style="text-anchor:start">DEPOT</text></g>';
   var truck = '<g id="truck" style="display:none"><rect x="-11" y="-8" width="22" height="16" rx="4" fill="var(--route)" stroke="var(--panel)" stroke-width="2.5"/><rect x="3" y="-5" width="6" height="7" rx="1" fill="var(--panel)"/></g>';
-  $('#cMap').innerHTML = BASE + routeSVG() + depot + D.map(function (r) { return binSVG(r, lc, true); }).join('') + truck;
-  setSeg('#cLayers', lc); $('#cLegend').innerHTML = legendHTML(lc); $('#cCap').innerHTML = capText(lc);
+  if (!geoMaps.c) $('#cMap').innerHTML = '<svg class="mapsvg" viewBox="40 40 960 570" role="group" aria-label="Map of waste bins and route">' + BASE + routeSVG() + depot + D.map(function (r) { return binSVG(r, lc, true); }).join('') + truck + '</svg>';
+  else renderGeoMap('c', lc, true);
+  setSeg('#cLayers', lc); $('#cLegend').innerHTML = legendHTML(lc); $('#cCap').innerHTML = capText(lc) + '<br><small>Sample locations; route lines are straight overlays and distance estimates still use the demo street grid.</small>';
   $('#btnPlay').disabled = !(plan && plan.route.length);
 }
 
@@ -321,6 +388,7 @@ function tick(id) {
   });
 }
 function playRoute() {
+  if (geoReady.c && geoMaps.c && plan && plan.route.length) { playGeoRoute(); return; }
   var path = $('#routeLine'), truck = $('#truck'); if (!plan || !path || !truck) return;
   var Lg = path.getTotalLength(), dur = reduceMotion() ? 1 : clamp(Lg * 8, 3500, 9000), t0 = performance.now();
   cancelAnimationFrame(anim); truck.style.display = '';
@@ -332,6 +400,25 @@ function playRoute() {
     if (p < 1) anim = requestAnimationFrame(step);
   }
   anim = requestAnimationFrame(step);
+}
+function playGeoRoute() {
+  var map = geoMaps.c, pts = [geoPoint(DEPOT)].concat(plan.route.map(function (id) { return binById(id); }).filter(Boolean).map(geoPoint), [geoPoint(DEPOT)]);
+  if (pts.length < 2) return;
+  var pixels = pts.map(function (p) { return map.project(p); }), lens = [], total = 0;
+  for (var i = 1; i < pixels.length; i++) { var dx = pixels[i].x - pixels[i - 1].x, dy = pixels[i].y - pixels[i - 1].y; lens.push(Math.sqrt(dx * dx + dy * dy)); total += lens[i - 1]; }
+  var truckEl = document.createElement('div'); truckEl.className = 'geo-truck'; truckEl.textContent = '↗';
+  var marker = new maplibregl.Marker({ element: truckEl, anchor: 'center' }).setLngLat(pts[0]).addTo(map);
+  var t0 = performance.now(), dur = reduceMotion() ? 1 : 6500;
+  function step(now) {
+    var distance = Math.min(1, (now - t0) / dur) * total, seg = 0;
+    while (seg < lens.length - 1 && distance > lens[seg]) { distance -= lens[seg]; seg++; }
+    var q = lens[seg] ? clamp(distance / lens[seg], 0, 1) : 1;
+    marker.setLngLat([pts[seg][0] + (pts[seg + 1][0] - pts[seg][0]) * q, pts[seg][1] + (pts[seg + 1][1] - pts[seg][1]) * q]);
+    var done = plan.route.filter(function (_id, ix) { var along = lens.slice(0, ix + 1).reduce(function (a, b) { return a + b; }, 0); return along <= (Math.min(1, (now - t0) / dur) * total); });
+    $('#cMap').querySelectorAll('.geo-stop').forEach(function (stop) { stop.classList.toggle('done', +stop.getAttribute('data-stop') < done.length); });
+    if ((now - t0) < dur) anim = requestAnimationFrame(step); else marker.remove();
+  }
+  cancelAnimationFrame(anim); anim = requestAnimationFrame(step);
 }
 function select(id) { sel = id; renderAll(); }
 
@@ -502,6 +589,7 @@ try { var saved = localStorage.getItem('sw-theme'); if (saved === 'light' || sav
 /* ------------------------------------------------------------------ boot */
 conL.inert = true; conR.inert = true; backBtn.inert = true; $('#denyR').inert = true;
 Api.init().then(function () {
+  initGeoMaps(Api.config && Api.config.map);
   renderTheme(); renderChrome(); updateCovers();
   if (!cloud()) { return reload().then(function () { routeFromHash(); }); }
   routeFromHash();

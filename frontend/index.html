@@ -9,6 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Schibsted+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5/dist/maplibre-gl.css">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -43,7 +44,7 @@
               <span class="muted" style="font-size:13px">Click a bin to select it</span>
             </div>
             <div class="caption"><p id="rCap"></p><div class="legend" id="rLegend"></div></div>
-            <div class="mapwrap"><svg class="mapsvg" id="rMap" viewBox="40 40 960 570" role="group" aria-label="Map of waste bins"></svg></div>
+            <div class="mapwrap"><div class="mapsvg geo-map" id="rMap" role="group" aria-label="Map of waste bins"></div></div>
           </div>
           <div class="col">
             <section class="card pad" aria-label="Selected bin"><div id="rInsp" aria-live="polite"></div></section>
@@ -95,7 +96,7 @@
               </div>
             </div>
             <div class="caption"><p id="cCap"></p><div class="legend" id="cLegend"></div></div>
-            <div class="mapwrap"><svg class="mapsvg" id="cMap" viewBox="40 40 960 570" role="group" aria-label="Map of waste bins and route"></svg></div>
+            <div class="mapwrap"><div class="mapsvg geo-map" id="cMap" role="group" aria-label="Map of waste bins and route"></div></div>
           </div>
           <div class="col">
             <section class="card pad" aria-label="Task list">
@@ -159,6 +160,8 @@
 
 <script src="engine.js"></script>
 <script src="api.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5/dist/maplibre-gl.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@aws/amazon-location-utilities-auth-helper@1"></script>
 <script src="app.js"></script>
 </body>
 </html>
