@@ -1,8 +1,4 @@
-"""HTTP API handler (API Gateway HTTP API, payload v2, Cognito JWT authorizer in front).
-
-Every route needs a signed-in user. Routes marked collector also need the
-`collectors` Cognito group.
-"""
+"""HTTP API handler (API Gateway HTTP API, payload v2)."""
 from __future__ import annotations
 
 import base64
@@ -50,15 +46,6 @@ def reset_clients() -> None:
     _sfn.cache_clear()
 
 
-def _groups(raw) -> list[str]:
-    """HTTP API passes list claims as the string "[a b]"."""
-    if isinstance(raw, list):
-        return raw
-    if not raw:
-        return []
-    return [g for g in re.split(r"[\s,]+", str(raw).strip("[]")) if g]
-
-
 def _resp(status: int, body) -> dict:
     return {"statusCode": status, "headers": {"content-type": "application/json", "cache-control": "no-store"},
             "body": json.dumps(body)}
@@ -84,16 +71,7 @@ def _bin_id(event) -> str:
     return bid
 
 
-def _require_collector(user: dict) -> None:
-    if "collectors" not in user["groups"]:
-        raise HttpError(403, "this action is for collectors")
-
-
 # ---- routes -----------------------------------------------------------------
-
-def me(event, user):
-    return 200, user
-
 
 def state(event, user):
     plan = store.get_plan()
@@ -113,7 +91,7 @@ def create_upload(event, user):
         raise HttpError(400, "photo must be JPEG, PNG or WebP")
     rid = uuid.uuid4().hex
     key = f"uploads/{bid}/{rid}"
-    store.put_report({"id": rid, "binId": bid, "ts": store.now_iso(), "status": "pending", "user": user["sub"],
+    store.put_report({"id": rid, "binId": bid, "ts": store.now_iso(), "status": "pending", "user": "public",
                       "ttl": int(time.time()) + 24 * 3600})
     post = _s3().generate_presigned_post(
         os.environ["UPLOAD_BUCKET"], key, Fields={"Content-Type": ctype},
@@ -124,7 +102,7 @@ def create_upload(event, user):
 def get_report(event, user):
     rid = (event.get("pathParameters") or {}).get("id", "")
     rep = store.get_report(rid) if re.fullmatch(r"[0-9a-f]{32}", rid) else None
-    if not rep or (rep.get("user") != user["sub"] and "collectors" not in user["groups"]):
+    if not rep:
         raise HttpError(404, "no such report")
     keep = ("id", "binId", "status", "level", "conf", "labels", "reason", "before", "after", "source", "model", "ts")
     return 200, {k: rep[k] for k in keep if k in rep}
@@ -138,7 +116,7 @@ def create_report(event, user):
         raise HttpError(400, "level must be an integer from 0 to 3")
     source = {"sample": "Sample photo", "correction": "Correction"}.get(body.get("source"), "Manual report")
     try:
-        rep = reports.apply_report(bid, level, 1.0, source, user["sub"], replaces=body.get("replaces"))
+        rep = reports.apply_report(bid, level, 1.0, source, "public", replaces=body.get("replaces"))
     except ValueError as exc:
         raise HttpError(400, str(exc)) from exc
     except reports.NotFound as exc:
@@ -149,7 +127,6 @@ def create_report(event, user):
 
 
 def put_config(event, user):
-    _require_collector(user)
     try:
         cfg = validate_config(_body(event))
     except ValueError as exc:
@@ -159,17 +136,15 @@ def put_config(event, user):
 
 
 def run_plan(event, user):
-    _require_collector(user)
     resp = _sfn().start_sync_execution(
         stateMachineArn=os.environ["STATE_MACHINE_ARN"],
-        input=json.dumps({"trigger": "api", "by": user["email"] or user["sub"]}))
+        input=json.dumps({"trigger": "api", "by": "SmartWaste user"}))
     if resp["status"] != "SUCCEEDED":
         raise HttpError(502, f"planner failed: {resp.get('error', resp['status'])}")
     return 200, json.loads(resp["output"])
 
 
 def set_stop(event, user):
-    _require_collector(user)
     bid = _bin_id(event)
     plan = store.get_plan()
     if not plan or plan.get("status") != "active" or bid not in plan["route"]:
@@ -180,7 +155,6 @@ def set_stop(event, user):
 
 
 def complete_plan(event, user):
-    _require_collector(user)
     plan = store.get_plan()
     if not plan or plan.get("status") != "active":
         raise HttpError(404, "there is no active plan")
@@ -200,13 +174,11 @@ def complete_plan(event, user):
 
 
 def reset(event, user):
-    _require_collector(user)
     store.seed(force=True)
     return 200, {"ok": True}
 
 
 ROUTES = {
-    "GET /api/me": me,
     "GET /api/state": state,
     "POST /api/bins/{id}/uploads": create_upload,
     "GET /api/reports/{id}": get_report,
@@ -224,9 +196,7 @@ def handler(event, _ctx):
     if not fn:
         return _resp(404, {"error": "not found"})
     try:
-        claims = event["requestContext"]["authorizer"]["jwt"]["claims"]
-        user = {"sub": claims["sub"], "email": claims.get("email", ""),
-                "groups": _groups(claims.get("cognito:groups"))}
+        user = {"sub": "public", "email": "", "groups": []}
         status, body = fn(event, user)
         return _resp(status, body)
     except HttpError as exc:

@@ -21,7 +21,6 @@ var geoMaps = {}, geoMarkers = { r: [], c: [] }, geoReady = { r: false, c: false
 function binById(id) { return bins.filter(function (b) { return b.id === id; })[0]; }
 function row(id) { return D.filter(function (r) { return r.b.id === id; })[0]; }
 function cloud() { return Api.mode === 'cloud'; }
-function me() { return cloud() ? Api.auth.me() : null; }
 function ticked() { return (plan && plan.ticked) || {}; }
 function stale() { return !!(cloud() && plan && bins.some(function (b) { return b.updatedAt && b.updatedAt > plan.createdAt; })); }
 
@@ -51,13 +50,11 @@ function reload(silent) {
     if (stale()) banner('Reports have come in since this plan was made.', null, { id: 'replan', label: 'Re-run planner' });
     else banner(null);
   }, function (e) {
-    if (e.code === 'auth') { authLost(); return; }
     if (!silent || !loaded) banner('Could not load bin data. ' + e.message, 'err', { id: 'retry', label: 'Try again' });
   });
 }
 function guard(p, what) {
   return p.catch(function (e) {
-    if (e.code === 'auth') { authLost(); return; }
     toast((what ? what + ': ' : '') + e.message);
     return reload(true);
   });
@@ -223,7 +220,6 @@ function renderStats() {
 }
 function updateCovers(over, urgent) {
   var l = $('#liveL'), r = $('#liveR');
-  if (cloud() && !Api.auth.session()) { l.textContent = 'Sign in to report'; r.textContent = 'Sign in as a collector'; return; }
   if (over === undefined) return;
   l.textContent = over + ' bins forecast to overflow';
   r.textContent = plan ? 'Route ready: ' + plan.route.length + ' stops, ' + plan.km.toFixed(1) + ' km' : urgent + ' priority bins waiting';
@@ -313,10 +309,7 @@ function tuneLabels() {
   $('#oP').textContent = Math.round(w.pred * 100) + '%'; $('#oC').textContent = Math.round(w.cur * 100) + '%'; $('#oT').textContent = Math.round(w.time * 100) + '%'; $('#oR').textContent = Math.round(w.risk * 100) + '%';
 }
 function renderChrome() {
-  var m = me();
   $('#modePill').hidden = cloud();
-  $('#userChip').hidden = !m;
-  if (m) { $('#userWho').textContent = m.email; $('#userRole').textContent = m.isCollector ? 'Collector' : 'Contributor'; }
   $('#clockLbl').textContent = cloud() ? 'Latest plan' : 'Planner time';
   $('#clock').textContent = planTimeLabel();
   $('#btnCollect').disabled = !plan || planBusy;
@@ -344,7 +337,6 @@ function finishReport(rep, thumb) {
 }
 function failReport(e) {
   busyMsg = '';
-  if (e.code === 'auth') { authLost(); return; }
   toast(e.message); renderReporter();
 }
 function reportSample(i) {
@@ -368,7 +360,7 @@ function runPlan() {
   planBusy = true; renderChrome();
   return Api.backend.runPlan().then(function (p) {
     planBusy = false; return reload().then(function () { toast('Plan ready: ' + p.route.length + ' bins, ' + p.km.toFixed(1) + ' km.'); });
-  }, function (e) { planBusy = false; renderChrome(); if (e.code === 'auth') authLost(); else toast(e.message); });
+  }, function (e) { planBusy = false; renderChrome(); toast(e.message); });
 }
 function collect() {
   var n = plan ? plan.route.length : 0;
@@ -384,7 +376,7 @@ function tick(id) {
   plan.ticked = plan.ticked || {}; plan.ticked[id] = done; renderAll();
   Api.backend.setStop(id, done).catch(function (e) {
     plan.ticked[id] = !done; renderAll();
-    if (e.code === 'auth') authLost(); else toast(e.message);
+    toast(e.message);
   });
 }
 function playRoute() {
@@ -461,99 +453,17 @@ function saveTune() {
 bind('#sH', function (v) { cfg.H = v; }); bind('#sCap', function (v) { cfg.truckCap = v; }); bind('#sLam', function (v) { cfg.lamPct = v; });
 bind('#wP', function (v) { cfg.wts.pred = v; }); bind('#wC', function (v) { cfg.wts.cur = v; }); bind('#wT', function (v) { cfg.wts.time = v; }); bind('#wR', function (v) { cfg.wts.risk = v; });
 
-/* ------------------------------------------------------------------ sign in */
-var dlg = $('#authDlg'), authMode = 'in', authResolve = null, authOk = false;
-function authSet(mode) {
-  authMode = mode;
-  var up = mode === 'up', conf = mode === 'confirm';
-  all('button', $('#authTabs')).forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-m') === (conf ? 'up' : mode) ? 'true' : 'false'); });
-  $('#authTabs').hidden = conf;
-  $('#authTitle').textContent = conf ? 'Check your email' : up ? 'Create account' : 'Sign in';
-  $('#pwHint').hidden = !up;
-  $('#authPw').autocomplete = up ? 'new-password' : 'current-password';
-  $('#codeField').hidden = !conf; $('#authResend').hidden = !conf;
-  $('#authEmail').readOnly = conf; $('#pwField').hidden = conf;
-  $('#authGo').textContent = conf ? 'Confirm and sign in' : up ? 'Create account' : 'Sign in';
-  authError('');
-}
-function authError(msg) { var el = $('#authErr'); el.hidden = !msg; el.textContent = msg || ''; }
-function askAuth(side) {
-  authSet('in'); $('#authPw').value = ''; $('#authCode').value = '';
-  $('#authWhy').textContent = side === 'r'
-    ? 'The collector console is for collection crews. Your account needs the collector role.'
-    : 'An account lets us trace each photo to a reporter and keeps the bin data trustworthy.';
-  var demo = Api.config && Api.config.demo;
-  $('#authDemo').hidden = !demo;
-  if (demo) {
-    $('#authDemoBtns').innerHTML = demo.accounts.map(function (a, i) { return '<button type="button" class="btn" data-demo="' + i + '">' + esc(a.label) + '</button>'; }).join('');
-  }
-  authOk = false;
-  return new Promise(function (resolve) { authResolve = resolve; dlg.showModal(); $('#authEmail').focus(); });
-}
-dlg.addEventListener('close', function () { if (authResolve) { var r = authResolve; authResolve = null; r(authOk); } });
-$('#authClose').addEventListener('click', function () { dlg.close(); });
-$('#authTabs').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) authSet(b.getAttribute('data-m')); });
-function doSignIn(email, pw) {
-  return Api.auth.signIn(email, pw).then(function () { authOk = true; delete $('#authPw').dataset.keep; dlg.close(); renderChrome(); }, function (e) {
-    if (e.type === 'UserNotConfirmedException') { $('#authPw').dataset.keep = pw; Api.auth.resend(email).catch(function () {}); authSet('confirm'); authError('Enter the code we just emailed you.'); return; }
-    authError(e.message);
-  });
-}
-$('#authForm').addEventListener('submit', function (e) {
-  e.preventDefault();
-  var email = $('#authEmail').value.trim(), pw = $('#authPw').value, code = $('#authCode').value.trim();
-  if (!/^\S+@\S+\.\S+$/.test(email)) { authError('Enter a valid email address.'); return; }
-  $('#authGo').disabled = true;
-  var done = function () { $('#authGo').disabled = false; };
-  if (authMode === 'confirm') {
-    if (!code) { authError('Enter the confirmation code.'); done(); return; }
-    Api.auth.confirm(email, code).then(function () { return doSignIn(email, $('#authPw').dataset.keep || ''); }, function (er) { authError(er.message); }).then(done);
-    return;
-  }
-  if (pw.length < 8) { authError('Use at least 8 characters for the password.'); done(); return; }
-  if (authMode === 'up') {
-    Api.auth.signUp(email, pw).then(function () { $('#authPw').dataset.keep = pw; authSet('confirm'); }, function (er) { authError(er.message); }).then(done);
-  } else doSignIn(email, pw).then(done);
-});
-$('#authResend').addEventListener('click', function () {
-  Api.auth.resend($('#authEmail').value.trim()).then(function () { authError(''); toast('A new code is on its way.'); }, function (er) { authError(er.message); });
-});
-$('#authDemoBtns').addEventListener('click', function (e) {
-  var b = e.target.closest('[data-demo]'); if (!b) return;
-  var d = Api.config.demo, a = d.accounts[+b.getAttribute('data-demo')];
-  doSignIn(a.email, d.password);
-});
-function signOut() {
-  Api.auth.signOut(); loaded = false; bins = []; D = []; plan = null; lastResult = null;
-  setOpen(null); renderChrome(); updateCovers();
-}
-$('#btnSignOut').addEventListener('click', signOut);
-function authLost() { toast('Your session ended. Sign in again.'); signOut(); }
-
 /* ------------------------------------------------------------------ gateway */
 var gate = $('#gate'), conL = $('#conL'), conR = $('#conR'), covL = $('#covL'), covR = $('#covR'), backBtn = $('#btnBack');
-function applyAccess(side) {
-  var m = me(), deny = $('#denyR');
-  if (side === 'r' && m && !m.isCollector) {
-    deny.innerHTML = '<div><h2>Collector access only</h2><p>You are signed in as <b class="mono">' + esc(m.email) + '</b>. The collector console needs the collector role, which an administrator adds to an account. You can still report bins from the Community Contributor side.</p><div class="btns"><button class="btn primary" data-deny="report" style="background:var(--teal);color:var(--teal-ink)">Report a bin instead</button><button class="btn" data-deny="switch">Use another account</button></div></div>';
-    deny.hidden = false;
-  } else { deny.hidden = true; deny.innerHTML = ''; }
-}
-$('#denyR').addEventListener('click', function (e) {
-  var b = e.target.closest('[data-deny]'); if (!b) return;
-  if (b.getAttribute('data-deny') === 'report') { setOpen(null); setTimeout(function () { enter('l'); }, 60); }
-  else { Api.auth.signOut(); setOpen(null); renderChrome(); setTimeout(function () { enter('r'); }, 60); }
-});
 function setOpen(side, instant) {
   if (side) { gate.setAttribute('data-open', side); gate.removeAttribute('data-returning'); }
   else { gate.removeAttribute('data-open'); gate.setAttribute('data-returning', ''); }
   conL.inert = side !== 'l'; conR.inert = side !== 'r';
   covL.inert = !!side; covR.inert = !!side; backBtn.inert = !side;
-  $('#denyR').inert = side !== 'r';
   if (side) {
-    applyAccess(side); renderChrome();
+    renderChrome();
     (side === 'l' ? conL : conR).scrollTop = 0;
-    if (!(side === 'r' && me() && !me().isCollector)) reload();
+    reload();
     setTimeout(function () { if (gate.getAttribute('data-open') === side) backBtn.focus({ preventScroll: true }); }, instant ? 0 : 950);
   }
   try { history.replaceState(null, '', side ? (side === 'l' ? '#reporter' : '#collector') : location.pathname + location.search); } catch (e) {}
@@ -562,7 +472,6 @@ function resumeCoverHover() { if (gate.hasAttribute('data-returning')) gate.remo
 gate.addEventListener('pointermove', resumeCoverHover);
 document.addEventListener('keydown', resumeCoverHover);
 function enter(side) {
-  if (cloud() && !Api.auth.session()) { askAuth(side).then(function (ok) { if (ok) setOpen(side); }); return; }
   setOpen(side);
 }
 function wireCover(el, side) {
@@ -572,9 +481,9 @@ function wireCover(el, side) {
 wireCover(covL, 'l'); wireCover(covR, 'r');
 function leave() { var was = gate.getAttribute('data-open'); setOpen(null); (was === 'l' ? covL : covR).focus({ preventScroll: true }); }
 backBtn.addEventListener('click', leave);
-document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && gate.hasAttribute('data-open') && !dlg.open) leave(); });
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && gate.hasAttribute('data-open')) leave(); });
 setInterval(function () {
-  if (cloud() && gate.hasAttribute('data-open') && document.visibilityState === 'visible' && !busyMsg && !tuneBusy && !planBusy && Api.auth.session()) reload(true);
+  if (cloud() && gate.hasAttribute('data-open') && document.visibilityState === 'visible' && !busyMsg && !tuneBusy && !planBusy) reload(true);
 }, 20000);
 
 /* ------------------------------------------------------------------ theme */
@@ -591,7 +500,7 @@ if (mq && mq.addEventListener) mq.addEventListener('change', renderTheme);
 try { var saved = localStorage.getItem('sw-theme'); if (saved === 'light' || saved === 'dark') document.documentElement.setAttribute('data-theme', saved); } catch (e) {}
 
 /* ------------------------------------------------------------------ boot */
-conL.inert = true; conR.inert = true; backBtn.inert = true; $('#denyR').inert = true;
+conL.inert = true; conR.inert = true; backBtn.inert = true;
 Api.init().then(function () {
   initGeoMaps(Api.config && Api.config.map);
   renderTheme(); renderChrome(); updateCovers();
@@ -602,7 +511,6 @@ function routeFromHash() {
   var h = (location.hash || '').replace('#', '');
   var side = h === 'reporter' ? 'l' : h === 'collector' ? 'r' : null;
   if (!side) return;
-  if (cloud() && !Api.auth.session()) return;
   setOpen(side, true);
 }
 window.__sw = { get state() { return { bins: bins, plan: plan, cfg: cfg, mode: Api.mode }; } };

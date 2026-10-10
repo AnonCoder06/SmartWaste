@@ -57,19 +57,11 @@ with sync_playwright() as pw:
 
     # ---- reporter portal
     page.click("#covL")
-    if not LOCAL:
-        page.wait_for_selector("#authDlg[open]")
-        check("sign-in dialog opens in cloud mode", True)
-        page.screenshot(path=str(SHOTS / "2-signin.png"))
-        page.click("#authForm [data-demo='1']")  # Reporter
-        page.wait_for_function("!document.querySelector(\'#authDlg\').open")
     page.wait_for_selector("#gate[data-open='l']")
     page.wait_for_selector("#rMap .bin")
     page.wait_for_timeout(1300)
     check("24 bins on the reporter map", page.locator("#rMap .bin").count() == 24)
     check("back button visible", page.is_visible("#btnBack"))
-    if not LOCAL:
-        check("user chip shows contributor", "contributor" in page.inner_text("#userChip").lower())
     over0 = int(page.inner_text("#rPulse .hot b"))
     page.click("#rMap .bin[data-id='B-05']")
     check("selecting a bin updates the inspector", "B-05" in page.inner_text("#rInsp"))
@@ -89,23 +81,10 @@ with sync_playwright() as pw:
     check("photo upload analysed", "Detected" in page.inner_text(".result b"), page.inner_text("#rRep")[:200])
     page.screenshot(path=str(SHOTS / "3-reporter.png"), full_page=False)
 
-    # ---- back to the gateway, then collector gating
+    # ---- back to the gateway, then open field operations
     page.click("#btnBack"); page.wait_for_function("!document.querySelector('#gate').hasAttribute('data-open')")
     page.wait_for_timeout(1000)
-    if not LOCAL:
-        page.click("#covR"); page.wait_for_selector("#gate[data-open='r']")
-        page.wait_for_selector("#denyR:not([hidden])")
-        check("contributor is told the console is for collectors", "Collector access only" in page.inner_text("#denyR"))
-        page.wait_for_timeout(1300)
-        page.screenshot(path=str(SHOTS / "4-denied.png"))
-        page.click("[data-deny='switch']")
-        page.wait_for_selector("#authDlg[open]")
-        page.click("#authForm [data-demo='0']")
-        page.wait_for_function("!document.querySelector(\'#authDlg\').open")
-        page.wait_for_selector("#gate[data-open='r']")
-        check("deny panel gone for collector", page.is_hidden("#denyR"))
-    else:
-        page.click("#covR"); page.wait_for_selector("#gate[data-open='r']")
+    page.click("#covR"); page.wait_for_selector("#gate[data-open='r']")
     page.wait_for_selector("#cMap .bin"); page.wait_for_timeout(1300)
     check("collector sees the console", page.is_visible("#btnPlan"))
     check("no route yet", "No route yet" in page.inner_text("#cStats"))
@@ -137,8 +116,6 @@ with sync_playwright() as pw:
     sw = mp.evaluate("document.documentElement.scrollWidth")
     check("no horizontal scroll on phone gateway", sw <= 390, str(sw))
     mp.click("#covR")
-    if not LOCAL:
-        mp.wait_for_selector("#authDlg[open]"); mp.click("#authForm [data-demo='0']"); mp.wait_for_function("!document.querySelector(\'#authDlg\').open")
     mp.wait_for_selector("#cMap .bin"); mp.wait_for_timeout(1400)
     mp.screenshot(path=str(SHOTS / "7-mobile-collector.png"))
     check("no horizontal scroll on phone console", mp.evaluate("document.querySelector('#conR').scrollWidth") <= 392,

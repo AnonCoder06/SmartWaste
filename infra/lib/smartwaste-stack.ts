@@ -4,7 +4,6 @@ import { CfnOutput, Duration, Fn, RemovalPolicy, Stack, StackProps, Tags } from 
 import { Construct } from 'constructs';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
-import { HttpUserPoolAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
@@ -35,7 +34,7 @@ import * as triggers from 'aws-cdk-lib/triggers';
  *
  *   Browser ──► CloudFront ──► S3 (static site)
  *                  │
- *                  └─ /api/* ──► API Gateway (JWT: Cognito) ──► Lambda api ──► DynamoDB
+ *                  └─ /api/* ──► API Gateway ──► Lambda api ──► DynamoDB
  *                                                                   │  └──► Step Functions (Express) ──► planner Lambdas ──► DynamoDB
  *                                                                   └──► S3 presigned POST
  *   Photo ──► S3 uploads ──► SQS (+DLQ) ──► Lambda analyzer (Pillow, Rekognition, optional SageMaker) ──► DynamoDB
@@ -44,7 +43,6 @@ import * as triggers from 'aws-cdk-lib/triggers';
  *
  * Optional context (cdk deploy -c key=value):
  *   alertEmail         subscribe this address to overflow and nightly-plan alerts
- *   demoPassword       create demo sign-ins with this password and show them on the sign-in dialog
  *   sagemakerEndpoint  name of a SageMaker endpoint the analyzer should ask for fill levels first
  *   domainName + hostedZoneName   serve the site from your own Route 53 domain (needs us-east-1)
  */
@@ -58,7 +56,6 @@ export class SmartWasteStack extends Stack {
       return v === undefined || v === null || v === '' ? undefined : String(v);
     };
     const alertEmail = ctx('alertEmail');
-    const demoPassword = ctx('demoPassword');
     const sagemakerEndpoint = ctx('sagemakerEndpoint');
     const domainName = ctx('domainName');
     const hostedZoneName = ctx('hostedZoneName');
@@ -103,30 +100,6 @@ export class SmartWasteStack extends Stack {
       // Browsers POST photos straight here with a presigned policy. The policy, not the origin, is the gate:
       // it fixes the key, content type and size.
       cors: [{ allowedMethods: [s3.HttpMethods.POST], allowedOrigins: ['*'], allowedHeaders: ['*'], maxAge: 3000 }],
-    });
-
-    // ------------------------------------------------------------------ auth
-    const pool = new cognito.UserPool(this, 'Users', {
-      selfSignUpEnabled: true,
-      signInAliases: { email: true },
-      autoVerify: { email: true },
-      standardAttributes: { email: { required: true, mutable: true } },
-      passwordPolicy: { minLength: 8, requireLowercase: true, requireUppercase: true, requireDigits: true, requireSymbols: true },
-      accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
-      removalPolicy: RemovalPolicy.DESTROY,
-    });
-    const client = pool.addClient('Web', {
-      generateSecret: false,
-      authFlows: { userPassword: true },
-      preventUserExistenceErrors: true,
-      idTokenValidity: Duration.hours(1),
-      accessTokenValidity: Duration.hours(1),
-      refreshTokenValidity: Duration.days(7),
-    });
-    const collectorsGroup = new cognito.CfnUserPoolGroup(this, 'CollectorsGroup', {
-      userPoolId: pool.userPoolId,
-      groupName: 'collectors',
-      description: 'Collection crews. Can run the planner and tick off stops.',
     });
 
     // The browser uses short-lived guest credentials for Amazon Location's
@@ -260,13 +233,11 @@ export class SmartWasteStack extends Stack {
 
     const api = new apigwv2.HttpApi(this, 'HttpApi', {
       apiName: 'smartwaste-api',
-      description: 'SmartWaste HTTP API. Every route needs a Cognito ID token.',
-      defaultAuthorizer: new HttpUserPoolAuthorizer('CognitoJwt', pool, { userPoolClients: [client] }),
+      description: 'Public SmartWaste HTTP API.',
     });
     const apiIntegration = new HttpLambdaIntegration('ApiIntegration', apiFn);
     // Keep in step with ROUTES in backend/src/smartwaste/api.py
     const routes: Array<[apigwv2.HttpMethod, string]> = [
-      [apigwv2.HttpMethod.GET, '/api/me'],
       [apigwv2.HttpMethod.GET, '/api/state'],
       [apigwv2.HttpMethod.POST, '/api/bins/{id}/uploads'],
       [apigwv2.HttpMethod.GET, '/api/reports/{id}'],
@@ -316,7 +287,7 @@ export class SmartWasteStack extends Stack {
       "font-src https://fonts.gstatic.com",
       "img-src 'self' data: blob:",
       "worker-src 'self' blob:",
-      `connect-src 'self' https://cognito-idp.${this.region}.amazonaws.com https://cognito-identity.${this.region}.amazonaws.com https://sts.${this.region}.amazonaws.com https://maps.geo.${this.region}.amazonaws.com https://*.s3.amazonaws.com https://*.s3.${this.region}.amazonaws.com`,
+      `connect-src 'self' https://cognito-identity.${this.region}.amazonaws.com https://sts.${this.region}.amazonaws.com https://maps.geo.${this.region}.amazonaws.com https://*.s3.amazonaws.com https://*.s3.${this.region}.amazonaws.com`,
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
@@ -375,20 +346,10 @@ export class SmartWasteStack extends Stack {
     const siteConfig: Record<string, unknown> = {
       mode: 'cloud',
       region: this.region,
-      userPoolClientId: client.userPoolClientId,
       apiBase: '/api',
       schedule: 'every night at 22:00 IST',
       map: { identityPoolId: mapIdentityPool.ref, region: this.region, style: 'Standard' },
     };
-    if (demoPassword) {
-      siteConfig.demo = {
-        password: demoPassword,
-        accounts: [
-          { label: 'Collector', email: 'demo.collector@smartwaste.example' },
-          { label: 'Reporter', email: 'demo.reporter@smartwaste.example' },
-        ],
-      };
-    }
     new s3deploy.BucketDeployment(this, 'DeploySite', {
       sources: [s3deploy.Source.asset(siteDir), s3deploy.Source.jsonData('config.json', siteConfig)],
       destinationBucket: siteBucket,
@@ -397,22 +358,18 @@ export class SmartWasteStack extends Stack {
       prune: true,
     });
 
-    // ------------------------------------------------------------------ seed data (and demo users) after every deploy
+    // ------------------------------------------------------------------ seed data after every deploy
     const seedFn = makeFn('Seed', 'smartwaste.seed.handler', {
       timeout: 60,
-      env: { USER_POOL_ID: pool.userPoolId, ...(demoPassword ? { DEMO_PASSWORD: demoPassword } : {}) },
+      env: {},
     });
     table.grantReadWriteData(seedFn);
-    seedFn.addToRolePolicy(new iam.PolicyStatement({
-      actions: ['cognito-idp:AdminCreateUser', 'cognito-idp:AdminSetUserPassword', 'cognito-idp:AdminAddUserToGroup'],
-      resources: [pool.userPoolArn],
-    }));
     new triggers.Trigger(this, 'SeedOnDeploy', {
       handler: seedFn,
       timeout: Duration.minutes(2),
       invocationType: triggers.InvocationType.REQUEST_RESPONSE,
       // the role is listed so its inline policy exists before the first invoke
-      executeAfter: [table, pool, collectorsGroup, ...(seedFn.role ? [seedFn.role] : [])],
+      executeAfter: [table, ...(seedFn.role ? [seedFn.role] : [])],
     });
 
     // ------------------------------------------------------------------ observability
@@ -467,8 +424,6 @@ export class SmartWasteStack extends Stack {
     const siteUrl = domainName ? `https://${domainName}` : `https://${cdn.distributionDomainName}`;
     new CfnOutput(this, 'SiteUrl', { value: siteUrl, description: 'Open this to use SmartWaste' });
     new CfnOutput(this, 'CloudFrontUrl', { value: `https://${cdn.distributionDomainName}` });
-    new CfnOutput(this, 'UserPoolId', { value: pool.userPoolId });
-    new CfnOutput(this, 'UserPoolClientId', { value: client.userPoolClientId });
     new CfnOutput(this, 'TableName', { value: table.tableName });
     new CfnOutput(this, 'UploadBucket', { value: uploads.bucketName });
     new CfnOutput(this, 'MapIdentityPoolId', { value: mapIdentityPool.ref });

@@ -5,7 +5,6 @@
 #
 # Optional environment variables:
 #   AWS_REGION         where to deploy (default: your CLI region, else us-east-1)
-#   DEMO_PASSWORD      create demo sign-ins and show them on the sign-in dialog (competition demo only)
 #   ALERT_EMAIL        email overflow warnings and the nightly plan here (confirm the SNS email after deploy)
 #   SAGEMAKER_ENDPOINT name of a SageMaker endpoint the photo analyzer should ask first
 #   DOMAIN_NAME, HOSTED_ZONE_NAME   serve from your own Route 53 domain (forces us-east-1)
@@ -36,7 +35,6 @@ scripts/build-layer.sh
 
 CTX=()
 [ -n "${ALERT_EMAIL:-}" ]         && CTX+=(-c "alertEmail=$ALERT_EMAIL")
-[ -n "${DEMO_PASSWORD:-}" ]       && CTX+=(-c "demoPassword=$DEMO_PASSWORD")
 [ -n "${SAGEMAKER_ENDPOINT:-}" ]  && CTX+=(-c "sagemakerEndpoint=$SAGEMAKER_ENDPOINT")
 [ -n "${DOMAIN_NAME:-}" ]         && CTX+=(-c "domainName=$DOMAIN_NAME" -c "hostedZoneName=${HOSTED_ZONE_NAME:?Set HOSTED_ZONE_NAME with DOMAIN_NAME}")
 
@@ -47,9 +45,5 @@ CTX=()
 URL="$(python3 -c "import json;print(json.load(open('cdk-outputs.json'))['SmartWaste']['SiteUrl'])")"
 echo
 echo "Live at: $URL"
-if [ -n "${DEMO_PASSWORD:-}" ]; then
-  echo "Running the smoke test against the live site..."
-  python3 scripts/smoke.py "$URL" --email demo.collector@smartwaste.example --password "$DEMO_PASSWORD" --reset
-else
-  echo "Create an account on the site, then add it to the 'collectors' group:  scripts/make-collector.sh you@example.com"
-fi
+echo "Running the smoke test against the live site..."
+python3 scripts/smoke.py "$URL" --reset

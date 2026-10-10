@@ -55,7 +55,6 @@
         <p class="foot">SmartWaste v2.0.0</p>
       </div>
     </div>
-    <div class="deny" id="denyL" hidden></div>
   </section>
 
   <section class="panel p-r" id="pR" aria-label="Field Operations portal">
@@ -130,7 +129,6 @@
         <p class="foot">SmartWaste v2.0.0</p>
       </div>
     </div>
-    <div class="deny" id="denyR" hidden></div>
   </section>
 
   <div class="brand" aria-hidden="true">
@@ -142,22 +140,8 @@
 <button class="back" id="btnBack" type="button"><span aria-hidden="true">&larr;</span> Back to Gateway</button>
 <div class="chrome-r">
   <span class="mode-pill" id="modePill" hidden title="No cloud backend was found, so data stays in this browser tab.">Offline demo</span>
-  <div class="userchip" id="userChip" hidden><span class="who mono" id="userWho"></span><span class="role" id="userRole"></span><button type="button" class="btn ghost" id="btnSignOut">Sign out</button></div>
   <div class="seg" role="group" aria-label="Colour theme" id="themeSeg"><button data-t="light" aria-pressed="false">Light</button><button data-t="dark" aria-pressed="false">Dark</button></div>
 </div>
-<dialog class="auth" id="authDlg" aria-labelledby="authTitle">
-  <form id="authForm" method="dialog" novalidate>
-    <div class="auth-head"><h2 id="authTitle">Sign in</h2><button type="button" class="x" id="authClose" aria-label="Close">&times;</button></div>
-    <p class="auth-why" id="authWhy"></p>
-    <div class="seg auth-tabs" role="group" aria-label="Sign in or create account" id="authTabs"><button type="button" data-m="in" aria-pressed="true">Sign in</button><button type="button" data-m="up" aria-pressed="false">Create account</button></div>
-    <div class="field"><label for="authEmail">Email</label><input id="authEmail" type="email" autocomplete="username" required></div>
-    <div class="field" id="pwField"><label for="authPw">Password</label><input id="authPw" type="password" autocomplete="current-password" required minlength="8"><small id="pwHint" hidden>At least 8 characters, with upper and lower case, a number and a symbol.</small></div>
-    <div class="field" id="codeField" hidden><label for="authCode">Confirmation code</label><input id="authCode" inputmode="numeric" autocomplete="one-time-code"><small>We emailed a 6-digit code to the address above.</small></div>
-    <p class="auth-err" id="authErr" role="alert" hidden></p>
-    <div class="auth-actions"><button type="submit" class="btn primary" id="authGo">Sign in</button><button type="button" class="btn ghost" id="authResend" hidden>Send a new code</button></div>
-    <div class="auth-demo" id="authDemo" hidden><p>Judges and testers</p><div id="authDemoBtns"></div></div>
-  </form>
-</dialog>
 <div id="toast" role="status"></div>
 
 <script src="engine.js"></script>

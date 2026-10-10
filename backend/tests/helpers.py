@@ -28,22 +28,12 @@ class AwsCase(unittest.TestCase):
         store.seed()
 
 
-def claims(sub="u1", email="u1@x.test", groups=None):
-    c = {"sub": sub, "email": email}
-    if groups is not None:
-        c["cognito:groups"] = "[" + " ".join(groups) + "]"
-    return c
-
-
-def call(route, user=None, body=None, path=None):
+def call(route, body=None, path=None):
     """Invoke the API handler like API Gateway would. Returns (status, parsed body)."""
     ev = {"routeKey": route, "pathParameters": path or {}, "body": json.dumps(body) if body is not None else None,
-          "requestContext": {"authorizer": {"jwt": {"claims": user or claims()}}}}
+          "requestContext": {}}
     out = api.handler(ev, None)
     return out["statusCode"], json.loads(out["body"])
-
-
-COLLECTOR = claims("c1", "c@x.test", ["collectors"])
 
 
 def photo(kind):

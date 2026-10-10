@@ -1,6 +1,6 @@
 /* SmartWaste data layer. Two interchangeable backends behind one interface:
 
-     cloud  config.json says mode "cloud": Cognito sign-in, then the API behind CloudFront (/api/*),
+     cloud  config.json says mode "cloud": the API behind CloudFront (/api/*),
             photos go straight to S3 with a presigned POST and the analyzer Lambda answers by polling.
      local  no config.json (or mode "local"): the engine in engine.js runs in the browser and
             data lives in memory. Used for development and as a fallback demo.
@@ -12,77 +12,10 @@
 (function (root) {
 'use strict';
 var E = root.SWEngine;
-var Api = { mode: 'local', config: null, backend: null, auth: null };
+var Api = { mode: 'local', config: null, backend: null };
 
-function ApiError(status, message, extra) { var e = new Error(message); e.status = status; e.extra = extra; e.code = status === 401 ? 'auth' : 'api'; return e; }
+function ApiError(status, message, extra) { var e = new Error(message); e.status = status; e.extra = extra; e.code = 'api'; return e; }
 var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
-function store(op, key, val) { try { return op === 'get' ? sessionStorage.getItem(key) : op === 'set' ? sessionStorage.setItem(key, val) : sessionStorage.removeItem(key); } catch (e) { return null; } }
-
-/* ------------------------------------------------------------------ auth (Cognito) */
-function b64json(part) {
-  var s = part.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '=';
-  return JSON.parse(decodeURIComponent(escape(atob(s))));
-}
-function claims(token) { try { return b64json(token.split('.')[1]); } catch (e) { return {}; } }
-var COGNITO_MSG = {
-  NotAuthorizedException: 'That email and password do not match.',
-  UserNotFoundException: 'That email and password do not match.',
-  UsernameExistsException: 'An account with this email already exists. Sign in instead.',
-  InvalidPasswordException: 'Use at least 8 characters with upper and lower case, a number and a symbol.',
-  InvalidParameterException: 'Check the email and password and try again.',
-  CodeMismatchException: 'That code is not right. Check the latest email.',
-  ExpiredCodeException: 'That code has expired. Send a new one.',
-  LimitExceededException: 'Too many attempts. Wait a few minutes and try again.',
-  TooManyRequestsException: 'Too many attempts. Wait a few minutes and try again.',
-  UserNotConfirmedException: 'This account is not confirmed yet.'
-};
-function makeAuth(conf) {
-  var endpoint = conf.authEndpoint || ('https://cognito-idp.' + conf.region + '.amazonaws.com/');
-  function cognito(op, body) {
-    return fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-amz-json-1.1', 'X-Amz-Target': 'AWSCognitoIdentityProviderService.' + op },
-      body: JSON.stringify(body)
-    }).then(function (r) {
-      return r.json().catch(function () { return {}; }).then(function (j) {
-        if (r.ok) return j;
-        var type = String(j.__type || '').split('#').pop();
-        var e = new Error(COGNITO_MSG[type] || j.message || 'Sign-in service error.'); e.type = type; throw e;
-      });
-    }, function () { throw new Error('Cannot reach the sign-in service. Check your connection.'); });
-  }
-  function save(res, email, keepRefresh) {
-    var id = res.IdToken, c = claims(id);
-    var s = { idToken: id, refreshToken: res.RefreshToken || keepRefresh, exp: c.exp, email: c.email || email, groups: c['cognito:groups'] || [] };
-    store('set', 'sw-session', JSON.stringify(s)); return s;
-  }
-  var A = {
-    session: function () { try { var s = JSON.parse(store('get', 'sw-session')); return s && s.idToken ? s : null; } catch (e) { return null; } },
-    signIn: function (email, password) {
-      return cognito('InitiateAuth', { AuthFlow: 'USER_PASSWORD_AUTH', ClientId: conf.userPoolClientId, AuthParameters: { USERNAME: email, PASSWORD: password } })
-        .then(function (j) {
-          if (!j.AuthenticationResult) throw new Error('This account needs a password change that this page cannot do yet.');
-          return save(j.AuthenticationResult, email);
-        });
-    },
-    signUp: function (email, password) {
-      return cognito('SignUp', { ClientId: conf.userPoolClientId, Username: email, Password: password, UserAttributes: [{ Name: 'email', Value: email }] });
-    },
-    confirm: function (email, code) { return cognito('ConfirmSignUp', { ClientId: conf.userPoolClientId, Username: email, ConfirmationCode: code }); },
-    resend: function (email) { return cognito('ResendConfirmationCode', { ClientId: conf.userPoolClientId, Username: email }); },
-    signOut: function () { store('del', 'sw-session'); },
-    token: function () {
-      var s = A.session(); if (!s) return Promise.reject(ApiError(401, 'Not signed in'));
-      if (s.exp - 60 > Date.now() / 1000) return Promise.resolve(s.idToken);
-      if (!s.refreshToken) { A.signOut(); return Promise.reject(ApiError(401, 'Session expired')); }
-      return cognito('InitiateAuth', { AuthFlow: 'REFRESH_TOKEN_AUTH', ClientId: conf.userPoolClientId, AuthParameters: { REFRESH_TOKEN: s.refreshToken } })
-        .then(function (j) { return save(j.AuthenticationResult, s.email, s.refreshToken).idToken; },
-              function () { A.signOut(); throw ApiError(401, 'Session expired'); });
-    },
-    me: function () { var s = A.session(); return s ? { email: s.email, groups: s.groups, isCollector: s.groups.indexOf('collectors') >= 0 } : null; }
-  };
-  return A;
-}
 
 /* ------------------------------------------------------------------ cloud backend */
 function shrink(file) {
@@ -99,21 +32,18 @@ function shrink(file) {
     img.src = url;
   });
 }
-function makeCloud(conf, auth) {
+function makeCloud(conf) {
   var base = conf.apiBase || '/api';
-  function call(method, path, body, retried) {
-    return auth.token().then(function (tok) {
-      return fetch(base + path, {
-        method: method, headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' },
-        body: body === undefined ? undefined : JSON.stringify(body)
-      });
+  function call(method, path, body) {
+    return fetch(base + path, {
+      method: method, headers: { 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body)
     }).then(function (r) {
       return r.json().catch(function () { return {}; }).then(function (j) {
-        if (r.status === 401 && !retried) { var s = auth.session(); if (s) { s.exp = 0; store('set', 'sw-session', JSON.stringify(s)); } return call(method, path, body, true); }
         if (!r.ok) throw ApiError(r.status, j.error || ('Request failed (' + r.status + ')'));
         return j;
       });
-    }, function (e) { if (e && e.code) throw e; throw new Error('Cannot reach SmartWaste. Check your connection.'); });
+    }, function () { throw new Error('Cannot reach SmartWaste. Check your connection.'); });
   }
   return {
     state: function () { return call('GET', '/state'); },
@@ -209,8 +139,8 @@ Api.init = function () {
   return fetch('config.json', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }, function () { return null; })
     .catch(function () { return null; })
     .then(function (conf) {
-      if (conf && conf.mode === 'cloud' && conf.userPoolClientId) {
-        Api.mode = 'cloud'; Api.config = conf; Api.auth = makeAuth(conf); Api.backend = makeCloud(conf, Api.auth);
+      if (conf && conf.mode === 'cloud') {
+        Api.mode = 'cloud'; Api.config = conf; Api.backend = makeCloud(conf);
       } else {
         Api.mode = 'local'; Api.config = conf || {}; Api.backend = makeLocal();
       }

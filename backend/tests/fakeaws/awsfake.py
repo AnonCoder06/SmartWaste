@@ -17,7 +17,7 @@ STATE = {}
 
 def reset():
     STATE.clear()
-    STATE.update(table=None, s3={}, events=[], users={}, groups={}, rek_labels=None, rek_error=False,
+    STATE.update(table=None, s3={}, events=[], rek_labels=None, rek_error=False,
                  sm_response=None, sm_error=False, fail_next_updates=0)
     STATE["table"] = FakeTable()
 
@@ -179,22 +179,9 @@ class StepFunctions:
             return {"status": "FAILED", "error": repr(exc)}
 
 
-class Cognito:
-    def admin_create_user(self, UserPoolId, Username, **_):
-        if Username in STATE["users"]:
-            raise _err("UsernameExistsException", "AdminCreateUser")
-        STATE["users"][Username] = {}
-
-    def admin_set_user_password(self, UserPoolId, Username, Password, Permanent):
-        STATE["users"][Username]["password"] = Password
-
-    def admin_add_user_to_group(self, UserPoolId, Username, GroupName):
-        STATE["groups"].setdefault(Username, []).append(GroupName)
-
-
 def client(name):
     return {"s3": S3, "events": Events, "rekognition": Rekognition, "sagemaker-runtime": SageMakerRuntime,
-            "stepfunctions": StepFunctions, "cognito-idp": Cognito}[name]()
+            "stepfunctions": StepFunctions}[name]()
 
 
 reset()

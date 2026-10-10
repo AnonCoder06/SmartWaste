@@ -40,17 +40,6 @@ class SeedTests(helpers.AwsCase):
         self.assertEqual(seed.handler({"force": True}, None)["seeded"], True)
         self.assertEqual(store.get_bin("B-01")["cur"], 40)
 
-    def test_demo_users_only_when_password_set(self):
-        import os
-        self.assertEqual(seed.handler({}, None)["demoUsers"], [])
-        os.environ.update(USER_POOL_ID="pool", DEMO_PASSWORD="Demo-pass-1")
-        try:
-            out = seed.handler({}, None)
-            self.assertEqual(len(out["demoUsers"]), 2)
-            self.assertEqual(awsfake.STATE["groups"], {"demo.collector@smartwaste.example": ["collectors"]})
-            seed.handler({}, None)  # second deploy: users exist, no error
-        finally:
-            del os.environ["USER_POOL_ID"], os.environ["DEMO_PASSWORD"]
 
 
 class ModelTests(unittest.TestCase):
