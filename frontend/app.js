@@ -86,7 +86,7 @@ function geoMarkerHTML(r, layer, withRoute) {
   var tip = b.id + ' ' + b.name + ' · ' + Math.round(b.cur) + '% now · ' + Math.round(r.pred) + '% by morning · priority ' + Math.round(r.score * 100);
   var el = document.createElement('button');
   el.type = 'button'; el.className = 'geo-bin' + (withRoute && plan && idx < 0 ? ' dim' : '') + (sel === b.id ? ' sel' : '');
-  el.setAttribute('data-id', b.id); el.setAttribute('aria-label', tip); el.title = tip;
+  el.setAttribute('data-id', b.id); el.setAttribute('data-place', b.name); el.setAttribute('aria-label', tip);
   el.style.setProperty('--pin', cssColor('--c-' + cls));
   el.innerHTML = '<span class="geo-bin-ring">' + val + '</span><span class="geo-bin-label">' + esc(b.id) + '</span>'
     + (idx >= 0 ? '<span class="geo-stop' + (ticked()[b.id] ? ' done' : '') + '" data-stop="' + idx + '">' + (idx + 1) + '</span>' : '');
@@ -146,11 +146,13 @@ function binSVG(r, layer, withRoute) {
   var dim = withRoute && plan && idx < 0 ? ' dim' : '';
   var isSel = sel === b.id;
   var tip = b.id + ' ' + b.name + ' · ' + Math.round(b.cur) + '% now · ' + Math.round(r.pred) + '% by morning · priority ' + Math.round(r.score * 100);
-  return '<g class="bin' + dim + (isSel ? ' sel' : '') + '" data-id="' + esc(b.id) + '" tabindex="0" role="button" aria-label="' + esc(tip) + '" transform="translate(' + b.x + ',' + b.y + ')"><title>' + esc(tip) + '</title>'
+  var placeW = Math.max(86, Math.min(210, b.name.length * 7 + 24));
+  return '<g class="bin' + dim + (isSel ? ' sel' : '') + '" data-id="' + esc(b.id) + '" tabindex="0" role="button" aria-label="' + esc(tip) + '" transform="translate(' + b.x + ',' + b.y + ')">'
     + (isSel ? '<circle class="halo" r="26"/>' : '') + '<circle class="fr" r="23"/>'
     + (layer === 'cur' ? '<circle class="fut" r="21" style="stroke:' + colorOf(E.fillCls(r.pred)) + '"/>' : '')
     + '<circle class="ring" r="16" style="stroke:' + colorOf(cls) + '"/><text class="val" y="4.5">' + txt + '</text><text class="bid" y="36">' + esc(b.id) + '</text>'
-    + (idx >= 0 ? '<g class="stop' + (ticked()[b.id] ? ' done' : '') + '" data-stop="' + idx + '" transform="translate(16,-16)"><circle r="9"/><text y="3.5">' + (idx + 1) + '</text></g>' : '') + '</g>';
+    + (idx >= 0 ? '<g class="stop' + (ticked()[b.id] ? ' done' : '') + '" data-stop="' + idx + '" transform="translate(16,-16)"><circle r="9"/><text y="3.5">' + (idx + 1) + '</text></g>' : '')
+    + '<g class="bin-place-tooltip" aria-hidden="true"><rect x="' + (-placeW / 2) + '" y="-54" width="' + placeW + '" height="26" rx="7"/><path d="M-5 -29 L0 -24 L5 -29 Z"/><text y="-37">' + esc(b.name) + '</text></g></g>';
 }
 function routeSVG() {
   if (!plan || !plan.route.length) return '';
@@ -242,7 +244,7 @@ function getSamples() { if (!samples) samples = [0, 1, 2, 3].map(E.sampleImage);
 function renderReporter() {
   var r = row(sel), el = $('#rRep'); if (!r) { el.innerHTML = ''; return; }
   var b = r.b, S = getSamples();
-  var h = '<div><p class="eyebrow">Report</p><h3 style="font-size:21px;margin-top:2px">What does the camera see?</h3></div>'
+  var h = '<div><p class="eyebrow">Report</p><h3 style="font-size:21px;margin-top:2px">Estimate fill level from a photo</h3></div>'
     + '<p class="rep-for">Reporting for <b class="mono">' + esc(b.id) + '</b> · ' + esc(b.name) + '. Pick another bin on the map to report on it.</p>'
     + '<label class="drop" for="photo"><input type="file" id="photo" accept="image/*"' + (busyMsg ? ' disabled' : '') + '><span>Choose a photo of ' + esc(b.id) + '</span><small>or tap a sample below</small></label>'
     + '<div class="samples">' + LEVELS.map(function (l, i) { return '<button class="sample" data-lv="' + i + '"' + (busyMsg ? ' disabled' : '') + ' aria-label="Sample photo: ' + l.n + '"><img alt="" src="' + S[i] + '"><span>' + l.n + '</span></button>'; }).join('') + '</div>';

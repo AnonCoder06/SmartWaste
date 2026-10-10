@@ -182,6 +182,11 @@ button{font:inherit;color:inherit}
 .geo-map{height:430px;min-width:0;overflow:hidden;background:var(--map)}
 .geo-map .maplibregl-canvas{outline:none}
 .geo-bin{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;padding:0;border:0;background:transparent;cursor:pointer;color:var(--ink);font:500 10px var(--font-mono);white-space:nowrap}
+.geo-bin::before{content:attr(data-place);position:absolute;z-index:5;left:50%;bottom:calc(100% + 8px);transform:translate(-50%,4px);padding:8px 11px;border:1.5px solid var(--edge);border-radius:9px;background:var(--panel);color:var(--ink);box-shadow:3px 3px 0 var(--shadow);font:600 12px/1.25 var(--font-body);white-space:nowrap;opacity:0;visibility:hidden;transition:opacity .16s ease,transform .16s ease,visibility 0s .16s;pointer-events:none}
+.geo-bin::after{content:"";position:absolute;z-index:6;left:50%;bottom:calc(100% + 2px);width:9px;height:9px;border-right:1.5px solid var(--edge);border-bottom:1.5px solid var(--edge);background:var(--panel);transform:translate(-50%,4px) rotate(45deg);opacity:0;visibility:hidden;transition:opacity .16s ease,transform .16s ease,visibility 0s .16s;pointer-events:none}
+.geo-bin:hover::before,.geo-bin:focus-visible::before,.geo-bin:hover::after,.geo-bin:focus-visible::after{opacity:1;visibility:visible;transition-delay:0s}
+.geo-bin:hover::before,.geo-bin:focus-visible::before{transform:translate(-50%,0)}
+.geo-bin:hover::after,.geo-bin:focus-visible::after{transform:translate(-50%,0) rotate(45deg)}
 .geo-bin-ring{display:grid;place-items:center;width:32px;height:32px;border:3px solid var(--pin);border-radius:50%;background:var(--panel);color:var(--ink);font:600 11px var(--font-mono);box-shadow:0 1px 5px #0005}
 .geo-bin.sel .geo-bin-ring{outline:3px solid var(--a);outline-offset:2px}
 .geo-bin.dim{opacity:.4}.geo-bin.dim.sel,.geo-bin.dim:hover{opacity:1}
@@ -200,6 +205,11 @@ button{font:inherit;color:inherit}
 .bin .bid{font:500 10.5px var(--font-mono);fill:var(--muted);text-anchor:middle}
 .bin .halo{fill:none;stroke:var(--a);stroke-width:2.5}
 .bin .fr{fill:none;stroke:none}
+.bin-place-tooltip{opacity:0;visibility:hidden;pointer-events:none;transition:opacity .16s ease}
+.bin-place-tooltip rect{fill:var(--panel);stroke:var(--edge);stroke-width:1.5;filter:drop-shadow(2px 2px 0 var(--shadow))}
+.bin-place-tooltip path{fill:var(--panel);stroke:var(--edge);stroke-width:1.5;stroke-linejoin:round}
+.bin-place-tooltip text{font:600 12px var(--font-body);fill:var(--ink);text-anchor:middle}
+.bin:hover .bin-place-tooltip,.bin:focus-visible .bin-place-tooltip{opacity:1;visibility:visible}
 .bin:focus-visible .fr{stroke:var(--a);stroke-width:2.5;stroke-dasharray:4 3}
 .bin:hover .ring{stroke-width:6.5}
 .bin.dim{opacity:.38}
