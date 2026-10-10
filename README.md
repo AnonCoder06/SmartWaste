@@ -124,27 +124,6 @@ The Python model and planner are a port of `frontend/engine.js`. `test_parity.py
 
 Photo bucket and site bucket block all public access and enforce TLS. CloudFront reaches the site bucket with origin access control. The photo bucket accepts only presigned POSTs, with a fixed key, content type and size. Uploaded photos expire after 30 days. CloudFront adds a strict Content-Security-Policy, HSTS, frame denial and nosniff. API Gateway throttles at 50 requests per second. Lambda error messages never include internals. Pending uploads expire from DynamoDB after a day. The application API is intentionally public for this MVP; do not store sensitive data or deploy it for private operational use without adding access controls.
 
-## Demo video script (3 minutes)
-
-The judges score idea and impact, use of AWS, design, execution, and the video. One feature that works beats five that almost do, so show the loop end to end.
-
-| Time | Show | Say |
-|---|---|---|
-| 0:00 | Gateway page, hover each side and a map marker | "Bins overflow because trucks go by schedule, not by need. SmartWaste predicts which bins need emptying tonight and routes the truck to them." |
-| 0:20 | Open the reporter side, pick bin B-05, upload a photo | "A resident photographs a bin. The photo goes straight to S3 with a presigned URL." |
-| 0:50 | Result card, priority jumps, then the CloudWatch dashboard | "S3 triggers SQS, a Lambda checks the photo with Rekognition, estimates the fill and updates DynamoDB. A dead-letter queue and alarms catch failures." |
-| 1:20 | Collector side, run the planner | "Step Functions scores every bin, fills the truck, and only then optimises the route." |
-| 1:50 | Map and route, play the truck, tick a stop | "9 of 24 bins, 5.7 km, 3.3 km shorter than visiting everything, every urgent bin covered." |
-| 2:15 | Step Functions graph in the console, EventBridge rule, SNS email | "It also runs by itself every night at 22:00 and emails the crew." |
-| 2:40 | Architecture diagram from this README | "All serverless, deployed with one command. CloudFront serves the site and the API." |
-
-## Submission checklist
-
-- Student verification on AWS Builder Center (required to compete)
-- Live URL from `scripts/deploy.sh` output
-- The 3-minute video above
-- Optional: a blog post on AWS Builder Center, linked in the submission, for the extra prize
-
 ## Layout
 
 ```
